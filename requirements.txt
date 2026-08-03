@@ -1,0 +1,4 @@
+reolinkapipy
+opencv-python
+pydantic
+requests

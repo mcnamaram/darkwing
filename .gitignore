@@ -1,0 +1,35 @@
+# Python / Language specific
+*.py[c]
+__pycache__/
+*.py[O]CF
+build/
+develop-eggs/
+dist/
+bin/
+lib/
+lib1.lvc/
+obj/
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+Pipfile
+Pipfile.lock
+
+# Tooling & IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local configuration & Secrets
+.env
+.env_.*
+.hermes/
+*.local
+.test/
+
+# Project specific ignore
+requirements.txt # (Wait, this is usually included, but I won't add it to gitignore)

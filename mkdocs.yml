@@ -1,0 +1,14 @@
+# mkdocs.yml
+site-name: DarkWing Swift Reporter
+site_url: https://darkwing-swift-reporter.github.io
+theme: material
+nav:
+    - Home: index.md
+    - Requirements & PRD: docs/prd.md
+    - Architecture Design: docs/architecture.md
+    - Technical Implementation: docs/implementation.md
+    - Testing Strategy: docs/test_strategy.md
+
+# Global configuration for MkDocs
+site_dir: .
+title: DarkWing Swift Analysis Pipeline
