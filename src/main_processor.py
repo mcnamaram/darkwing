@@ -6,7 +6,7 @@ from typing import List
 # Local modules defined in the project (assuming they are in the same package scope)
 from scheduler import generate_sampling_schedules
 # Import the stub function from our analysis engine
-from analysis_engine import TimeSegment, process_video_segment # Note: We use the mock version for now!
+from analysis_engine import TimeSegment, process_video_segment
 
 
 def run_pipeline() -> None:
@@ -41,7 +41,7 @@ def run_pipeline() -> None:
                     'tower_id': 'T1',
                     'date': segment['date'],
                     'sample_time': segment['sample_time_edt'], # Time reported to forms
-                    'first_detection_ts': s.detection_timestamp_edt.strftime('%H:%M:%S'), # Time recorded internally (the precise sighting)
+                        'first_detection_ts': s.timestamp_utc.strftime('%H:%M:%S'), # Time recorded internally (the precise sighting)
                     'confidence': f"{s.confidence_score:.2f}",
                     'behavioral_flag': s.behavioral_notes or "N/A",
                     'raw_segment_id': segment['task_id']

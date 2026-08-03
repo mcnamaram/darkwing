@@ -1,0 +1,33 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "hermes-agent",
+  "elements": [
+    // ========================================================================
+    // PLACEHOLDER 1: ARCHITECTURE FLOW DIAGRAM (For docs/architecture.md)
+    // A conceptual flow showing the main components and data handoffs.
+    // To refine: Replace UUIDs with specific element IDs, and connect these shapes using 'arrow' elements.
+    // ========================================================================
+
+    { "type": "rectangle", "id": "r1_ingestion", "x": 50, "y": 100, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#a5d8ff", "fillStyle": "solid", "boundElements": [{ "id": "t_r1", "type": "text" }] },
+    { "type": "text", "id": "t_r1", "x": 70, "y": 110, "width": 160, "height": 25, "text": "Ingestion Gateway (Source)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r1", "originalText": "Ingestion Gateway (Source)", "autoResize": true },
+
+    { "type": "arrow", "id": "a1_raw", "x": 250, "y": 140, "width": 150, "height": 0, "points": [[0,0],[150,0]], "endArrowhead": "arrow" },
+
+    { "type": "rectangle", "id": "r2_queue", "x": 400, "y": 90, "width": 250, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#d0bfff", "fillStyle": "solid", "boundElements": [{ "id": "t_r2", "type": "text" }] },
+    { "type": "text", "id": "t_r2", "x": 410, "y": 100, "width": 230, "height": 25, "text": "Raw Message Queue (Kafka)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r2", "originalText": "Raw Message Queue (Kafka)", "autoResize": true },
+
+    { "type": "arrow", "id": "a3_pass", "x": 650, "y": 115, "width": 150, "height": 0, "points": [[0,0],[150,0]], "endArrowhead": "arrow" },
+    
+    // Processing Stage (Validation)
+    { "type": "rectangle", "id": "r3_validator", "x": 900, "y": 100, "width": 250, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r3", "type": "text" }] },
+    { "type": "text", "id": "t_r3", "x": 910, "y": 115, "width": 230, "height": 25, "text": "Validation Pipeline (Schema & Rules)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r3", "originalText": "Validation Pipeline (Schema & Rules)", "autoResize": true },
+
+    // Final Storage Stage
+    { "type": "rectangle", "id": "r4_ledger", "x": 1200, "y": 100, "width": 250, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#c3fae8", "fillStyle": "solid", "boundElements": [{ "id": "t_r4", "type": "text" }] },
+    { "type": "text", "id": "t_r4", "x": 1210, "y": 115, "width": 230, "height": 25, "text": "Data Ledger (Immutable Store)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r4", "originalText": "Data Ledger (Immutable Store)", "autoResize": true }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff"
+  }
+}

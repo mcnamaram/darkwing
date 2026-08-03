@@ -26,10 +26,30 @@ Pipfile.lock
 
 # Local configuration & Secrets
 .env
-.env_.*
+.env.*
 .hermes/
 *.local
 .test/
+*.cfg
+camera.cfg
+googleforms
+googleforms.*
 
 # Project specific ignore
-requirements.txt # (Wait, this is usually included, but I won't add it to gitignore)
+site/
+PROGRESS_LOG.md
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Sensitive data patterns - never commit
+# (any file matching these globs is rejected by pre-commit if added later)
+*credentials*
+*secrets*
+*token*
+*cookie*
+!secrets_handling.md

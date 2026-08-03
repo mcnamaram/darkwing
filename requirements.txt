@@ -1,4 +1,6 @@
-reolinkapipy
+reolinkapi
 opencv-python
 pydantic
-requests
+python-dotenv
+pytest
+dotenv

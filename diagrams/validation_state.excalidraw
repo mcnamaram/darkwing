@@ -1,0 +1,35 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "hermes-agent",
+  "elements": [
+    // ========================================================================
+    // PLACEHOLDER 2: DATA VALIDATION STATE MACHINE (For docs/concepts.md)
+    // Shows the flow from raw input to validated output.
+    // A simple state machine using rectangles and arrows. Nodes require manual connection in Excalidraw for full effect.
+    // ========================================================================
+
+    { "type": "rectangle", "id": "r1_raw", "x": 50, "y": 200, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#d0bfff", "fillStyle": "solid", "boundElements": [{ "id": "t_r1", "type": "text" }] },
+    { "type": "text", "id": "t_r1", "x": 70, "y": 215, "width": 160, "height": 25, "text": "Raw Payload (Input)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r1", "originalText": "Raw Payload (Input)", "autoResize": true },
+
+    { "type": "arrow", "id": "a1_start", "x": 250, "y": 240, "width": 150, "height": 0, "points": [[0,0],[150,0]], "endArrowhead": "arrow" },
+    
+    // State: Validate
+    { "type": "rectangle", "id": "r2_validate", "x": 400, "y": 180, "width": 250, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r2", "type": "text" }] },
+    { "type": "text", "id": "t_r2", "x": 410, "y": 195, "width": 230, "height": 25, "text": "Validation Engine Run", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r2", "originalText": "Validation Engine Run", "autoResize": true },
+
+    // Result States
+    { "type": "rectangle", "id": "r3_fail", "x": 700, "y": 150, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#ffc9c9", "fillStyle": "solid", "boundElements": [{ "id": "t_r3", "type": "text" }] },
+    { "type": "text", "id": "t_r3", "x": 710, "y": 165, "width": 180, "height": 25, "text": "Data Failure (Quarantine)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r3", "originalText": "Data Failure (Quarantine)", "autoResize": true },
+
+    { "type": "arrow", "id": "a2_fail", "x": 650, "y": 180, "width": 100, "height": 0, "points": [[0,0],[100,0]], "endArrowhead": "arrow" },
+
+    { "type": "rectangle", "id": "r4_success", "x": 950, "y": 180, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#b2f2bb", "fillStyle": "solid", "boundElements": [{ "id": "t_r4", "type": "text" }] },
+    { "type": "text", "id": "t_r4", "x": 970, "y": 195, "width": 180, "height": 25, "text": "Validated Payload (Ready for Storage)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r4", "originalText": "Validated Payload (Ready for Storage)", "autoResize": true },
+
+    { "type": "arrow", "id": "a3_success", "x": 1200, "y": 180, "width": 50, "height": 0, "points": [[0,0],[50,0]], "endArrowhead": "arrow" }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff"
+  }
+}

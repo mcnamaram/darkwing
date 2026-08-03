@@ -1,14 +1,36 @@
-# mkdocs.yml
-site-name: DarkWing Swift Reporter
-site_url: https://darkwing-swift-reporter.github.io
-theme: material
+site_name: DarkWing Swift Reporter
+theme:
+  name: material
+  custom_dir: overrides
+  icon:
+    logo: swift
+  favicon: img/swift.ico
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
 nav:
     - Home: index.md
-    - Requirements & PRD: docs/prd.md
-    - Architecture Design: docs/architecture.md
-    - Technical Implementation: docs/implementation.md
-    - Testing Strategy: docs/test_strategy.md
-
-# Global configuration for MkDocs
-site_dir: .
-title: DarkWing Swift Analysis Pipeline
+    - Getting Started:
+      - Setup: setup.md
+      - Tutorial: tutorial-1.md
+    - Project Memory: project_memory.md
+    - System Deep Dives:
+      - Architecture: architecture.md
+      - Project Requirements: prd.md
+      - API Reference: api_reference.md
+      - Secrets Handling: secrets_handling.md
+      - Deployment: deployment.md
+    - Methodologies & Validation: test_strategy.md

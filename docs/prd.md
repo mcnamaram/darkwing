@@ -1,35 +1,65 @@
-# DarkWing Swift Reporter - Project Requirements Document (PRD)
-## 📝 Goal & Scope
+# Project Requirements
 
-The primary objective is to automate a structured, multi-day biological data collection process for Chimney Swifts inhabiting multiple towers (e.g., T1). This system acts as an automated field assistant designed to replace manual observation logging and video review. The final output is not the video reel itself, but a clean, structured digital **System Log** suitable for bulk submission into external forms like the Google Form used by Dr. Kellam.
+## Why this project exists
 
-## 📅 Operational Workflow (The Human Protocol)
-The system must strictly adhere to these time-based rules:
-1.  **Target Time:** The project runs daily from 6:00 AM to 9:00 PM EDT.
-2.  **Sampling Frequency:** Observation checks must occur at $\text{XX}:00$, $\text{XX}:20$, and $\text{XX}:40$. (The system must handle the full range up to $T_{\text{end}}$).
-3.  **Look-Ahead Protocol:** For a sampling time $T_{\text{start}}$, the video analysis segment *must* read from $T_{\text{start}}$ to $\mathbf{T_{\text{start}} + 19 \text{ minutes}}$. This is non-negotiable and overrides simple 20-minute blocking.
+The Wild Bird Recovery research program operates Reolink cameras pointed at Chimney Swift nesting towers. A researcher (or volunteer) needs to watch each day's footage and record structured observations at three points in every hour from 6:00 AM to 9:00 PM. Today, that work is done by hand against a Google Form, one response per observation, and the data is tedious to type: the form's questions are long-form, the response values are long-form, and there are 45 observations per day per tower. The form itself lives behind an organization that requires authenticated submission, which means a plain `curl` against the form's `formResponse` endpoint returns 404.
 
-## <0xF0><0x9F><0x97><0x84>️ Required Data Fields (The System Log Schema)
-The final system output must be a CSV/JSON adhering strictly to this schema for each check:
+**What success looks like.** A researcher can produce a CSV (by hand, from a spreadsheet, or eventually from automated video detection) and submit all of its rows to the form, with the work checked in and resumable, with each row validated before it leaves the local machine, and without manually typing the form's long-form question text or long-form answer text on every row.
 
-| Field Name | Format | Description | Source / Origin | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-|| `TOWER_ID` | String | Unique tower identifier (e.g., T1). | Input Config | |
-|| `DATE` | YYYY-MM-DD | Date of collection. | System Clock | Must be accurate. |
-|| `SAMPLE_TIME` | HH:MM | The time the observation was checked against schedule. | Derived from $T_{\text{start}}$. | This is what gets written to the form's date/time field. |
-|| `FIRST_DETECTION_TS` | HH:MM:SS | Timestamp (EDT) of the first required sighting within the scan window. | Live Video & ML Analysis | Null value signifies zero swifts present. |
-|| `CONFIDENCE` | Float | The model's numeric confidence score for the detection. | Live Video & ML Analysis | System must record if < 0.7. |
-|| `ADULT_COUNT` | Integer | Number of adult Swifts in the chimney (best guess). | Live Video & ML Analysis | |
-|| `NESTING_STAGE` | String | Current stage: [None, Building, Egg(s) present, Nestling(s) present, Post-fledgling]. | Advanced AI Processing | |
-|| `BILL_ACTIVITY` | String | Actions with bill: [N/A/No, Handling material, Feeding, Tending eggs, Tending nestlings, Preening self, Preening other, Other]. | Advanced AI Processing | |
-|| `FLIGHT_EVENTS` | String | Observed movements (max 3 choices): [In, Out, Changed Position within chimney]. | Live Video & ML Analysis | Concat unless only one. |
-|| `PROXIMMITY_COUNT` | Integer | Adults within two body-lengths of the nest. | Live Video & ML Analysis | |
-|| `AWAKE_STATUS` | String | State: [Yes, No, Maybe, No adults present]. | Live Video & ML Analysis | |
-|| `BEHAVIORAL_FLAG`| String | Categorized notes (e.g., "Nest switch", "Visible Eggs"). | Advanced AI Processing | This captures remaining rich, non-numeric data points. |
+## What we're solving
 
-## 💡 Key Assumption & Scope Limitation
-*   **Video Output:** The system will NOT generate the final reel or clip archives automatically. Clipping is an *optional* step for human review only; the core output must be the structured System Log.
-*   **Time Zone:** All internal logic and logged data points MUST reference **EDT**.
+1. **The form's question text is long and repetitive.** Manually transcribing each row is slow and error-prone.
+2. **The form's answer values are long and repetitive.** Each answer is a full sentence ("Yes, at least one adult flew into the chimney"). For a single day at a single tower, that's 45 rows × 5–6 form fields × a sentence per field — too many keystrokes for a volunteer workflow.
+3. **The form requires authenticated submission.** Direct POSTs to the form's public endpoint do not work; the user must go through an authenticated path.
+4. **Submission is currently one form-response at a time, in a browser.** There is no way to submit a batch.
+5. **There is no way to review before submitting.** Once a row is in the form's responses sheet, the only way to fix it is to edit the sheet directly.
 
----
-***End of PRD***
+## The approach
+
+A small Python package reads a curated CSV (one row per observation) and submits each row, one at a time, to a Google Apps Script `doPost` webhook running in the user's account. The webhook constructs a Google Form response and submits it through the form's authenticated path. The Python code:
+
+- accepts **short codes** (2–3 characters) in the CSV for any answer that has a fixed set of values,
+- expands those codes into the form's full answer text before sending,
+- validates every row against a fixed schema before any network call,
+- logs every submission attempt locally so the work is auditable and resumable,
+- handles auth via the user's existing `gcloud` CLI session — no Google Cloud project required for MVP1.
+
+## What data is collected
+
+One row per observation. An "observation" is one of three checkpoints in an hour, 6:00 AM to 9:00 PM, 45 rows per day per tower. For each row the system captures:
+
+- **When**: the date and the hour, plus which of the three checkpoints (00, 20, or 40 minutes past the hour).
+- **Where**: the tower number (e.g. `Tower 3`).
+- **What was seen**: the count of adult swifts inside the chimney, the stage in the nesting cycle, what the swifts were doing with their bills, what flight activity was observed, how many adults were near the nest, and whether any adults were awake.
+- **Free-form notes**: anything the researcher noticed that the form's questions don't already cover.
+
+The exact fields and their values are defined in the [Architecture document](./architecture.md); the schema, the validation rules, and the code-side translation table live there. This document is intentionally not specific about the data shape — it's specific about the *why*.
+
+## What is in scope for MVP1
+
+- A hand-curated CSV (one row per observation) is read by the system.
+- Each row is validated against the schema defined in [Architecture](./architecture.md#csv-schema-and-translation-table).
+- Each validated row is POSTed to a Google Apps Script `doPost` webhook, which constructs a Google Form response and submits it.
+- A local JSON-Lines log file records every submission attempt.
+- The work is resumable: re-running a submission skips rows that have already been logged as successful.
+
+## What is out of scope (planned for later epics)
+
+- **Video playback download** from the Reolink camera (MVP2). A researcher still curates the CSV by hand in MVP1.
+- **Automated detection of adult swifts in video** (MVP3). Today, a human watches the video and decides what to put in the CSV.
+- **A human-review UI before submission** (MVP4). Today, the CSV is the review layer; the user edits the CSV before running the submit.
+- **Multi-user support.** MVP1 is single-submitter; the submitter's name and email come from a local config file.
+
+## Acceptance criteria for MVP1
+
+The system is considered done when, given a CSV of valid rows, an authenticated user can:
+
+1. Run one command and have every valid row appear in the form's responses sheet.
+2. Re-run the same command after a partial failure and have only the previously-uncaught rows submitted.
+3. See a clear error (and no network call) for any row that fails validation.
+4. See a clear error and a partial-batch state if the auth token expires mid-batch.
+5. Have no row of the CSV persisted to a remote system that the form did not accept.
+
+## Acknowledgements
+
+The project depends on the [Reolink Camera API Python client](https://github.com/ReolinkCameraAPI/reolinkapipy) maintained by Oleaintueri and the Reolink community, which provides the playback-download primitives that the MVP2 epic will use.
