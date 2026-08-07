@@ -51,7 +51,7 @@ def test_read_csv_first_row(valid_records: list):
     assert r.time_of_day == "06:00"
 
 
-def test_read_csv_last_row(valid_records: list):
+def test_read_csv_last_row(valid_records):
     r = valid_records[-1]
     assert r.tower == "Tower 2"
     assert r.hour == 18

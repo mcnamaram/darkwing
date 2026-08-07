@@ -22,7 +22,7 @@ Authorization: Bearer <gcloud access token>
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"status": "success", "response_id": "<Apps-Script-generated-id>"}
+{"status": "success", "response": {"matched": <N>}}
 ```
 
 ### Response (script error)
@@ -33,8 +33,6 @@ Content-Type: application/json
 
 {"status": "error", "message": "<error string from Apps Script>"}
 ```
-
-Apps Script returns 200 on its own errors; the client inspects the JSON `status` field, not the HTTP code, to distinguish success from failure.
 
 ### The script's role
 

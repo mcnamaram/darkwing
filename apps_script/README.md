@@ -15,7 +15,8 @@ to a Google Form.
    - Execute as: **Me** (your Google account)
    - Who has access: **Anyone with Google account** (or stricter, as needed)
 5. Copy the `/exec` URL and add it to your `.env`:
-   ```
+
+   ```env
    DARKWING_APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
    ```
 
