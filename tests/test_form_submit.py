@@ -49,8 +49,10 @@ def test_get_apps_script_url_from_env(monkeypatch):
     assert _get_apps_script_url() == "https://example.com/exec"
 
 
-def test_get_apps_script_url_missing(monkeypatch):
+def test_get_apps_script_url_missing(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("DARKWING_APPS_SCRIPT_URL", raising=False)
+    # Ensure no .env file is found
+    monkeypatch.setattr("pathlib.Path.exists", lambda self, *a, **k: False)
     with pytest.raises(OSError, match="DARKWING_APPS_SCRIPT_URL"):
         _get_apps_script_url()
 
