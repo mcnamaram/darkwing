@@ -28,11 +28,11 @@ def sample_record() -> ObservationRecord:
         "minutes_past_hour": "0",
         "tower": "Tower 3",
         "num_adults": "2",
-        "nesting_stage": "No nest",
-        "bill_use": "N/A or No",
-        "flights": '["yes_flew_in"]',
+        "nesting_stage": "no",
+        "bill_use": "na",
+        "flights": '["in"]',
         "num_near_nest": "1",
-        "awake": "Yes",
+        "awake": "y",
         "notes": "test note",
     })
 
@@ -49,11 +49,9 @@ def test_get_apps_script_url_from_env(monkeypatch):
     assert _get_apps_script_url() == "https://example.com/exec"
 
 
-def test_get_apps_script_url_missing():
-    import os
-    if "DARKWING_APPS_SCRIPT_URL" in os.environ:
-        del os.environ["DARKWING_APPS_SCRIPT_URL"]
-    with pytest.raises(EnvironmentError, match="DARKWING_APPS_SCRIPT_URL"):
+def test_get_apps_script_url_missing(monkeypatch):
+    monkeypatch.delenv("DARKWING_APPS_SCRIPT_URL", raising=False)
+    with pytest.raises(OSError, match="DARKWING_APPS_SCRIPT_URL"):
         _get_apps_script_url()
 
 
