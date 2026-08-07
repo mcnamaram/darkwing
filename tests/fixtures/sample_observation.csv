@@ -1,0 +1,5 @@
+date_str,hour,minutes_past_hour,tower,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
+6/15/2026,6,0,Tower 3,2,No nest,N/A or No,"[""yes_flew_in""]",1,Yes,"1 north, 1 west. west moved to north"
+6/15/2026,7,0,Tower 3,3,No nest,Carrying nesting material,"[""yes_flew_in"",""yes_flew_out""]",2,Yes,
+6/15/2026,8,0,Tower 1,0,No nest,N/A or No,"[]",0,Yes,
+6/15/2026,18,30,Tower 2,1,Eggs,N/A or No,"[""no_flight""]",0,No,

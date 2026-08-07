@@ -1,6 +1,4 @@
-reolinkapi
-opencv-python
-pydantic
-python-dotenv
-pytest
-dotenv
+pydantic>=2.13
+requests>=2.34
+pytest>=9.1
+python-dotenv>=1.0.1
