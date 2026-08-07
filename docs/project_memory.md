@@ -11,7 +11,7 @@
 ## Current status
 
 | Phase | Name | Status | What it delivers |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 0 | Repo reset | ✅ done | Clean tree, no broken source or build artifacts |
 | 0.5 | Docs aligned | ✅ done | All docs rewritten to match MVP1 design |
 | 1 | Schema | ✅ done | `src/darkwing/schema.py` — Pydantic models, short-code translation table |
@@ -31,7 +31,7 @@
 ## What changed (and what didn't) since the old code
 
 | Before (broken) | Now (MVP1) |
-|---|---|
+| --- | --- |
 | `src/analysis_engine.py`, `main_processor.py`, `scheduler.py`, `camera_client.py`, `config.py`, `data_types.py` | All deleted |
 | Video detection logic (MVP2+) | Deferred — not in scope |
 | `site/` build artifacts in repo | Gone; `.gitignore` covers them |
@@ -42,7 +42,7 @@
 
 ## Source tree (what you'll find)
 
-```
+```ascii
 src/darkwing/
   schema.py      Pydantic ObservationRecord + translation tables
   csv_io.py      read_csv(), write_submission_log(), get_submission_log()
@@ -70,17 +70,22 @@ apps_script/
 ## What's next
 
 ### Immediate — Phase 7: manual smoke test
+
 Deploy `apps_script/doPost.gs` to your Google Apps Script editor, set `FORM_ID` in script properties, and run:
+
 ```bash
 .venv/bin/python -m darkwing.cli submit tests/fixtures/sample_observation.csv --dry-run
 .venv/bin/python -m darkwing.cli submit tests/fixtures/sample_observation.csv
 ```
+
 One human-verified submission against the live form closes MVP1.
 
 ### Planned — Phase 5 (remainder): Jupyter notebook
+
 `notebooks/01_submit_existing_csv.ipynb` — a five-cell notebook that wraps the CLI for non-technical users. Skipped for now because the CLI works and the notebook can be added in a future commit.
 
 ### Future — MVP2: video detection
+
 Automated observation generation from Reolink camera footage. Would reintroduce `reolinkapi`, `opencv-python`, and the video-processing pipeline. Not started; the architecture in [architecture.md](./architecture.md) leaves a clean extension point.
 
 ---

@@ -46,7 +46,7 @@ def test_read_csv_first_row(valid_records: list):
     r = valid_records[0]
     assert r.tower == "Tower 3"
     assert r.num_adults == 2
-    assert r.flights == ["yes_flew_in"]
+    assert r.flights == ["in"]
     assert r.date_str == "06/15/2026"
     assert r.time_of_day == "06:00"
 
@@ -57,7 +57,7 @@ def test_read_csv_last_row(valid_records):
     assert r.hour == 18
     assert r.minutes_past_hour == 30
     assert r.time_of_day == "18:30"
-    assert r.awake == "No"
+    assert r.awake == "n"
 
 
 def test_read_csv_empty_flights(valid_records: list):

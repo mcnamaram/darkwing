@@ -8,7 +8,7 @@ The script is hosted in the user's Google Apps Script editor and deployed as a *
 
 ### Request
 
-```
+```sh
 POST <DARKWING_APPS_SCRIPT_URL>
 Content-Type: application/json
 Authorization: Bearer <gcloud access token>
@@ -18,7 +18,7 @@ Authorization: Bearer <gcloud access token>
 
 ### Response (success)
 
-```
+```sh
 HTTP/1.1 200 OK
 Content-Type: application/json
 
@@ -27,7 +27,7 @@ Content-Type: application/json
 
 ### Response (script error)
 
-```
+```sh
 HTTP/1.1 200 OK
 Content-Type: application/json
 
@@ -86,6 +86,7 @@ See [Setup](./setup.md#google-authentication) for the one-time authentication fl
 The Google Forms API (the `forms.responses` collection) targets the new Google Forms product, whose form IDs are short opaque strings (e.g. `1abcXYZ…`). The form in this project is a Classic Google Form, whose URL contains the longer `1FAIpQLS…` prefix. The Forms API does not support submitting responses to Classic Forms.
 
 Two alternative paths were considered and rejected:
+
 - **Migrate the form to the new product.** A one-time effort, but disruptive to any existing responses and to any other consumer of the form.
 - **POST directly to the form's `formResponse` endpoint.** Fragile — the endpoint requires fresh CSRF tokens and session cookies, and breaks whenever Google changes the form UI. This is what the `googleforms` curl capture was attempting.
 

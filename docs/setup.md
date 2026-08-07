@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.12 or newer.
+- Python 3.14 or newer.
 - A Google account with access to the Google Form and the Google Apps Script deployment.
 - A local clone of this repository.
 
@@ -26,19 +26,18 @@ Verify the install:
 The second command should report at least one test collected. If it reports `errors during collection`, your `src/darkwing/` package is not on the Python path — re-check that you are in the repo root and that the `src/` directory contains a `darkwing/` subdirectory with an `__init__.py`.
 
 <a id="google-authentication"></a>
+
 ## 2. Google authentication
 
 ### Install the gcloud CLI
 
 The submission flow needs a short-lived Google OAuth bearer token. The simplest path uses the `gcloud` CLI.
 
-### Install the gcloud CLI
-
 If you don't already have it:
 
 - macOS: `brew install --cask google-cloud-sdk`
-- Linux: see https://cloud.google.com/sdk/docs/install
-- Windows: see https://cloud.google.com/sdk/docs/install
+- Linux: see <https://cloud.google.com/sdk/docs/install>
+- Windows: see <https://cloud.google.com/sdk/docs/install>
 
 Verify with `gcloud --version`.
 
@@ -76,7 +75,7 @@ chmod 600 .env
 The `.env` file is gitignored. **Do not commit it.** See [Secrets Handling](./secrets_handling.md) for the full policy.
 
 | Variable | Required | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `DARKWING_APPS_SCRIPT_URL` | yes | The `/exec` URL of the deployed Apps Script `doPost`. |
 | `DARKWING_FORM_ID` | yes | The form ID (the long string in the form's URL). |
 | `DARKWING_SUBMITTER_EMAIL` | yes | The email the form will record for each submission. |

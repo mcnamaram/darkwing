@@ -1,4 +1,4 @@
-## Welcome to DarkWing
+# Welcome to DarkWing
 
 **DarkWing** is a small, practical tool for collecting Chimney Swift observation data from Reolink camera playback and submitting it as a structured batch to a Google Form used by the Wild Bird Recovery research program.
 
@@ -10,7 +10,7 @@ The system is intentionally small:
 - POST each row to a Google Apps Script webhook, which constructs and submits a Google Form response.
 - Log every submission locally so the run is auditable and resumable.
 
-### Where to start
+## Where to start
 
 - **[Project Memory](./project_memory.md)** — current status and what to read first if you are new.
 - **[Setup Guide](./setup.md)** — get a working environment and authenticate with Google.
