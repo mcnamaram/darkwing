@@ -59,7 +59,7 @@ The CSV has eleven columns. Five are short-code columns with fixed-value transla
 | Column | Type | Range / format | Notes |
 | --- | --- | --- | --- |
 | `hour` | int | `[0, 23]` | 24-hour clock. |
-| `minutes_past_hour` | int | `[0, 59]` | Any integer. |
+|| `minutes_past_hour` | int | `0, 20, or 40` | Three scan windows per hour (00, 20, 40). |
 | `num_adults` | int | `≥ 0` | Free integer; the form allows up to 10 in the radio list and an "Other" freeform. |
 | `num_near_nest` | int | `≥ 0` | Same shape as `num_adults`. |
 

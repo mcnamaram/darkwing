@@ -3,31 +3,44 @@
   "version": 2,
   "source": "hermes-agent",
   "elements": [
-    // ========================================================================
-    // PLACEHOLDER 1: ARCHITECTURE FLOW DIAGRAM (For docs/architecture.md)
-    // A conceptual flow showing the main components and data handoffs.
-    // To refine: Replace UUIDs with specific element IDs, and connect these shapes using 'arrow' elements.
-    // ========================================================================
+    // DarkWing architecture flow: CSV → validate → translate → POST
+    { "type": "rectangle", "id": "r1_csv", "x": 30, "y": 120, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#a5d8ff", "fillStyle": "solid", "boundElements": [{ "id": "t_r1", "type": "text" }, { "id": "a1", "type": "arrow" }] },
+    { "type": "text", "id": "t_r1", "x": 50, "y": 130, "width": 120, "height": 50, "text": "Curated CSV\n(observation rows)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r1", "originalText": "Curated CSV\n(observation rows)", "autoResize": true },
 
-    { "type": "rectangle", "id": "r1_ingestion", "x": 50, "y": 100, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#a5d8ff", "fillStyle": "solid", "boundElements": [{ "id": "t_r1", "type": "text" }] },
-    { "type": "text", "id": "t_r1", "x": 70, "y": 110, "width": 160, "height": 25, "text": "Ingestion Gateway (Source)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r1", "originalText": "Ingestion Gateway (Source)", "autoResize": true },
+    { "type": "arrow", "id": "a1", "x": 190, "y": 155, "width": 80, "height": 0, "points": [[0,0],[80,0]], "endArrowhead": "arrow" },
 
-    { "type": "arrow", "id": "a1_raw", "x": 250, "y": 140, "width": 150, "height": 0, "points": [[0,0],[150,0]], "endArrowhead": "arrow" },
+    { "type": "rectangle", "id": "r2_io", "x": 280, "y": 110, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r2", "type": "text" }, { "id": "a2", "type": "arrow" }] },
+    { "type": "text", "id": "t_r2", "x": 300, "y": 120, "width": 120, "height": 50, "text": "csv_io.read_csv()\n(parse flights, row check)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r2", "originalText": "csv_io.read_csv()\n(parse flights, row check)", "autoResize": true },
 
-    { "type": "rectangle", "id": "r2_queue", "x": 400, "y": 90, "width": 250, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#d0bfff", "fillStyle": "solid", "boundElements": [{ "id": "t_r2", "type": "text" }] },
-    { "type": "text", "id": "t_r2", "x": 410, "y": 100, "width": 230, "height": 25, "text": "Raw Message Queue (Kafka)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r2", "originalText": "Raw Message Queue (Kafka)", "autoResize": true },
+    { "type": "arrow", "id": "a2", "x": 440, "y": 155, "width": 80, "height": 0, "points": [[0,0],[80,0]], "endArrowhead": "arrow" },
 
-    { "type": "arrow", "id": "a3_pass", "x": 650, "y": 115, "width": 150, "height": 0, "points": [[0,0],[150,0]], "endArrowhead": "arrow" },
-    
-    // Processing Stage (Validation)
-    { "type": "rectangle", "id": "r3_validator", "x": 900, "y": 100, "width": 250, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r3", "type": "text" }] },
-    { "type": "text", "id": "t_r3", "x": 910, "y": 115, "width": 230, "height": 25, "text": "Validation Pipeline (Schema & Rules)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r3", "originalText": "Validation Pipeline (Schema & Rules)", "autoResize": true },
+    { "type": "rectangle", "id": "r3_schema", "x": 530, "y": 110, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r3", "type": "text" }, { "id": "a3", "type": "arrow" }] },
+    { "type": "text", "id": "t_r3", "x": 550, "y": 120, "width": 120, "height": 50, "text": "schema.ObservationRecord\n(minutes: 0/20/40, codes)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r3", "originalText": "schema.ObservationRecord\n(minutes: 0/20/40, codes)", "autoResize": true },
 
-    // Final Storage Stage
-    { "type": "rectangle", "id": "r4_ledger", "x": 1200, "y": 100, "width": 250, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#c3fae8", "fillStyle": "solid", "boundElements": [{ "id": "t_r4", "type": "text" }] },
-    { "type": "text", "id": "t_r4", "x": 1210, "y": 115, "width": 230, "height": 25, "text": "Data Ledger (Immutable Store)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r4", "originalText": "Data Ledger (Immutable Store)", "autoResize": true }
-  ],
-  "appState": {
-    "viewBackgroundColor": "#ffffff"
-  }
+    { "type": "arrow", "id": "a3", "x": 690, "y": 155, "width": 80, "height": 0, "points": [[0,0],[80,0]], "endArrowhead": "arrow" },
+
+    { "type": "rectangle", "id": "r4_payload", "x": 780, "y": 110, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#a5d8ff", "fillStyle": "solid", "boundElements": [{ "id": "t_r4", "type": "text" }, { "id": "a4", "type": "arrow" }] },
+    { "type": "text", "id": "t_r4", "x": 800, "y": 120, "width": 120, "height": 50, "text": "to_form_payload()\n(expand codes → long text)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r4", "originalText": "to_form_payload()\n(expand codes → long text)", "autoResize": true },
+
+    { "type": "arrow", "id": "a4", "x": 940, "y": 155, "width": 80, "height": 0, "points": [[0,0],[80,0]], "endArrowhead": "arrow" },
+
+    { "type": "rectangle", "id": "r5_submit", "x": 1030, "y": 110, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r5", "type": "text" }, { "id": "a5", "type": "arrow" }] },
+    { "type": "text", "id": "t_r5", "x": 1050, "y": 120, "width": 120, "height": 50, "text": "form_submit\n(gcloud token, POST)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r5", "originalText": "form_submit\n(gcloud token, POST)", "autoResize": true },
+
+    { "type": "arrow", "id": "a5", "x": 1190, "y": 155, "width": 100, "height": 0, "points": [[0,0],[100,0]], "endArrowhead": "arrow" },
+
+    { "type": "rectangle", "id": "r6_apps", "x": 1300, "y": 80, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#a5d8ff", "fillStyle": "solid", "boundElements": [{ "id": "t_r6", "type": "text" }] },
+    { "type": "text", "id": "t_r6", "x": 1320, "y": 90, "width": 120, "height": 50, "text": "Apps Script doPost\n(FormApp.createResponse)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r6", "originalText": "Apps Script doPost\n(FormApp.createResponse)", "autoResize": true },
+
+    // Down arrow from submit to log
+    { "type": "arrow", "id": "a6", "x": 1110, "y": 180, "width": 0, "height": 60, "points": [[0,0],[0,60]], "endArrowhead": "arrow" },
+
+    { "type": "rectangle", "id": "r7_log", "x": 1030, "y": 260, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#d0bfff", "fillStyle": "solid", "boundElements": [{ "id": "t_r7", "type": "text" }] },
+    { "type": "text", "id": "t_r7", "x": 1050, "y": 270, "width": 120, "height": 50, "text": "submitted_log.jsonl\n(persistence between runs)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r7", "originalText": "submitted_log.jsonl\n(persistence between runs)", "autoResize": true },
+
+    // Rejection arrow
+    { "type": "arrow", "id": "a_reject", "x": 610, "y": 180, "width": 0, "height": 60, "points": [[0,0],[0,60]], "endArrowhead": "arrow" },
+    { "type": "rectangle", "id": "r8_fail", "x": 530, "y": 260, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ff8fab", "fillStyle": "solid", "boundElements": [{ "id": "t_r8", "type": "text" }] },
+    { "type": "text", "id": "t_r8", "x": 550, "y": 270, "width": 120, "height": 50, "text": "ValidationError\n(abort, report rows)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r8", "originalText": "ValidationError\n(abort, report rows)", "autoResize": true }
+  ]
 }

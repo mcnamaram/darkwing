@@ -3,33 +3,38 @@
   "version": 2,
   "source": "hermes-agent",
   "elements": [
-    // ========================================================================
-    // PLACEHOLDER 2: DATA VALIDATION STATE MACHINE (For docs/concepts.md)
-    // Shows the flow from raw input to validated output.
-    // A simple state machine using rectangles and arrows. Nodes require manual connection in Excalidraw for full effect.
-    // ========================================================================
+    // DarkWing validation state machine: raw CSV row → Pydantic → ObservationRecord
+    { "type": "rectangle", "id": "r1_raw", "x": 30, "y": 140, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#d0bfff", "fillStyle": "solid", "boundElements": [{ "id": "t_r1", "type": "text" }, { "id": "a1", "type": "arrow" }] },
+    { "type": "text", "id": "t_r1", "x": 50, "y": 150, "width": 120, "height": 50, "text": "Raw CSV Row\n(dict from csv.DictReader)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r1", "originalText": "Raw CSV Row\n(dict from csv.DictReader)", "autoResize": true },
 
-    { "type": "rectangle", "id": "r1_raw", "x": 50, "y": 200, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#d0bfff", "fillStyle": "solid", "boundElements": [{ "id": "t_r1", "type": "text" }] },
-    { "type": "text", "id": "t_r1", "x": 70, "y": 215, "width": 160, "height": 25, "text": "Raw Payload (Input)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r1", "originalText": "Raw Payload (Input)", "autoResize": true },
+    { "type": "arrow", "id": "a1", "x": 190, "y": 175, "width": 100, "height": 0, "points": [[0,0],[100,0]], "endArrowhead": "arrow" },
 
-    { "type": "arrow", "id": "a1_start", "x": 250, "y": 240, "width": 150, "height": 0, "points": [[0,0],[150,0]], "endArrowhead": "arrow" },
-    
-    // State: Validate
-    { "type": "rectangle", "id": "r2_validate", "x": 400, "y": 180, "width": 250, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r2", "type": "text" }] },
-    { "type": "text", "id": "t_r2", "x": 410, "y": 195, "width": 230, "height": 25, "text": "Validation Engine Run", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r2", "originalText": "Validation Engine Run", "autoResize": true },
+    // Validate type coercion
+    { "type": "rectangle", "id": "r2_coerce", "x": 300, "y": 130, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r2", "type": "text" }, { "id": "a2", "type": "arrow" }] },
+    { "type": "text", "id": "t_r2", "x": 320, "y": 140, "width": 120, "height": 50, "text": "Type Coercion\n(str → int, str → list)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r2", "originalText": "Type Coercion\n(str → int, str → list)", "autoResize": true },
 
-    // Result States
-    { "type": "rectangle", "id": "r3_fail", "x": 700, "y": 150, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#ffc9c9", "fillStyle": "solid", "boundElements": [{ "id": "t_r3", "type": "text" }] },
-    { "type": "text", "id": "t_r3", "x": 710, "y": 165, "width": 180, "height": 25, "text": "Data Failure (Quarantine)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r3", "originalText": "Data Failure (Quarantine)", "autoResize": true },
+    { "type": "arrow", "id": "a2", "x": 460, "y": 175, "width": 80, "height": 0, "points": [[0,0],[80,0]], "endArrowhead": "arrow" },
 
-    { "type": "arrow", "id": "a2_fail", "x": 650, "y": 180, "width": 100, "height": 0, "points": [[0,0],[100,0]], "endArrowhead": "arrow" },
+    // Validate domain rules
+    { "type": "rectangle", "id": "r3_domain", "x": 550, "y": 130, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ffd8a8", "fillStyle": "solid", "boundElements": [{ "id": "t_r3", "type": "text" }, { "id": "a3", "type": "arrow" }] },
+    { "type": "text", "id": "t_r3", "x": 570, "y": 140, "width": 120, "height": 50, "text": "Domain Validators\n(minutes 0/20/40, code lookup)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r3", "originalText": "Domain Validators\n(minutes 0/20/40, code lookup)", "autoResize": true },
 
-    { "type": "rectangle", "id": "r4_success", "x": 950, "y": 180, "width": 200, "height": 80, "roundness": { "type": 3 }, "backgroundColor": "#b2f2bb", "fillStyle": "solid", "boundElements": [{ "id": "t_r4", "type": "text" }] },
-    { "type": "text", "id": "t_r4", "x": 970, "y": 195, "width": 180, "height": 25, "text": "Validated Payload (Ready for Storage)", "fontSize": 20, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r4", "originalText": "Validated Payload (Ready for Storage)", "autoResize": true },
+    { "type": "arrow", "id": "a3", "x": 710, "y": 175, "width": 80, "height": 0, "points": [[0,0],[80,0]], "endArrowhead": "arrow" },
 
-    { "type": "arrow", "id": "a3_success", "x": 1200, "y": 180, "width": 50, "height": 0, "points": [[0,0],[50,0]], "endArrowhead": "arrow" }
-  ],
-  "appState": {
-    "viewBackgroundColor": "#ffffff"
-  }
+    // Output: validated record
+    { "type": "rectangle", "id": "r4_ok", "x": 800, "y": 130, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#86efac", "fillStyle": "solid", "boundElements": [{ "id": "t_r4", "type": "text" }] },
+    { "type": "text", "id": "t_r4", "x": 820, "y": 140, "width": 120, "height": 50, "text": "ObservationRecord\n(validated, ready to submit)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r4", "originalText": "ObservationRecord\n(validated, ready to submit)", "autoResize": true },
+
+    // Rejection paths
+    { "type": "arrow", "id": "a_bad_type", "x": 380, "y": 200, "width": 0, "height": 60, "points": [[0,0],[0,60]], "endArrowhead": "arrow" },
+    { "type": "rectangle", "id": "r5_badtype", "x": 300, "y": 280, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ff8fab", "fillStyle": "solid", "boundElements": [{ "id": "t_r5", "type": "text" }] },
+    { "type": "text", "id": "t_r5", "x": 320, "y": 290, "width": 120, "height": 50, "text": "ValidationError\n(unparseable type / missing field)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r5", "originalText": "ValidationError\n(unparseable type / missing field)", "autoResize": true },
+
+    { "type": "arrow", "id": "a_bad_domain", "x": 630, "y": 200, "width": 0, "height": 60, "points": [[0,0],[0,60]], "endArrowhead": "arrow" },
+    { "type": "rectangle", "id": "r6_baddomain", "x": 550, "y": 280, "width": 160, "height": 70, "roundness": { "type": 3 }, "backgroundColor": "#ff8fab", "fillStyle": "solid", "boundElements": [{ "id": "t_r6", "type": "text" }] },
+    { "type": "text", "id": "t_r6", "x": 570, "y": 290, "width": 120, "height": 50, "text": "ValidationError\n(minutes not 0/20/40, bad code)", "fontSize": 16, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "center", "verticalAlign": "middle", "containerId": "r6", "originalText": "ValidationError\n(minutes not 0/20/40, bad code)", "autoResize": true },
+
+    // Legend
+    { "type": "text", "id": "legend", "x": 30, "y": 400, "width": 500, "height": 40, "text": "Legend:  #d0bfff = input  #ffd8a8 = processing  #86efac = success  #ff8fab = error", "fontSize": 14, "fontFamily": 1, "strokeColor": "#1e1e1e", "textAlign": "left", "verticalAlign": "top", "originalText": "Legend:  #d0bfff = input  #ffd8a8 = processing  #86efac = success  #ff8fab = error", "autoResize": true }
+  ]
 }
