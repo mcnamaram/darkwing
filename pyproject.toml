@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "darkwing"
+version = "0.1.0"
+description = "Automated observation reporting for Chimney Swifts"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.13",
+    "requests>=2.34",
+    "python-dotenv>=1.0.1",
+]
+
+[project.scripts]
+darkwing = "darkwing.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

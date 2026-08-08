@@ -2,83 +2,116 @@
 
 Automated, structured observation reporting for Chimney Swifts.
 
-## 📋 Overview
+## Overview
 
-**DarkWing Swift Reporter** is an automated data collection system designed to monitor multiple towers and generate structured reports on Chimney Swift behavior.
+DarkWing reads a CSV of curated observations, validates each row, expands short codes into the Google Form's long-form text, and submits them one at a time via a Google Apps Script `doPost` webhook. The webhook constructs and submits the form responses on your behalf. A local JSON-Lines log file (`submitted_log.jsonl`) records every attempt.
 
-**Note:** The primary purpose of this system is to produce a **System Log (CSV/JSON)** that captures vital research metrics. It is *not* intended for high-level video production or social media clipping; it is built as an automated "field assistant" to ensure data consistency and completeness during the observation window.
+**What this is:** A batch-submission tool for volunteer chimney swift observers who fill out a Google Form many times per day. One CSV row = one form response.
 
-## ✨ Key Features
+**What this is not:** A video-analysis system. It does not connect to cameras or run detection models. It works with data that a human has already curated.
 
-- **Automated Sampling:** Automatically schedules checks at 10:00, 20:00, and 40:00 minutes past every hour from 6:00 AM to 9:00 PM EDT.
-- **Strict Observation Windows:** Enforces a precise 19-minute analysis window for every sampling event ($T_{start}$ to $T_{start} + 19$ mins).
-- **Complex Data Extraction:** Implements advanced logic to track nest_cycle stages, bill activity, and movement types.
-- **Structured Reporting:** Generates automated data logs ready for import into research databases.
+## Quick start
 
-## 🚀 Getting Started
+```bash
+# Install
+git clone https://github.com/mcnamaram/darkwing.git
+cd darkwing
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
 
-### Prerequisites
+# Configure — see docs/setup.md for full instructions
+cp .env.example .env   # (create manually; see docs)
+gcloud auth login
 
-- Python 3.9+
-- Access to Reolink camera feeds via `reolinkapipy`
-- Valid API credentials for the vision analysis engine
+# Validate a CSV
+darkwing validate observations.csv
 
-### Installation
+# Dry-run submit
+darkwing submit observations.csv --dry-run
 
-1. **Clone the repository:**
+# Submit for real
+darkwing submit observations.csv
+```
 
-   ```bash
-   git clone https://github.com/your-org/darkwing-swift-reporter.git
-   cd darkwing-swift-reporter
-   ```
+See [docs/setup.md](docs/setup.md) for full setup. See [docs/tutorial-1.md](docs/tutorial-1.md) for an end-to-end walkthrough.
 
-2. **Create and activate a virtual environment:**
+## CLI
 
-   ```bash
-   python -m venv .venv
-   # On macOS/Linux:
-   source .venv/bin/activate
-   # On Windows:
-   .\venv\Scripts\activate
-   ```
+```
+darkwing {validate,submit} path/to/file.csv [--dry-run]
+```
 
-3. **Install dependencies:**
+| Command | What it does |
+|---|---|
+| `validate <csv>` | Reads and validates every row against the Pydantic schema. Prints summary. Exit 0 = clean, 1 = errors. |
+| `submit <csv> --dry-run` | Validates, expands short codes, prints what *would* be submitted. No network calls. |
+| `submit <csv>` | Validates, expands short codes, POSTs each row to the Apps Script webhook. Logs every attempt to `submitted_log.jsonl`. |
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+## CSV format
 
-### Configuration
+The `flights` column uses semicolon-delimited short codes (no quoting needed):
 
-Update your local environment variables or configuration file with camera credentials and site-specific IDs (e.g., `T1`). Reference `docs/prd.md` for the full list of required fields and configuration options.
+```csv
+tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
+3,6/15/2026,6,0,2,no,na,in;chg,1,y,1 north, 1 west
+```
 
-## 🏗️ System Architecture
+| Column | Example | Notes |
+|---|---|---|
+| `tower` | `3` | Maps to "Tower 3" on the form |
+| `date_str` | `6/15/2026` | M/D/YYYY or MM/DD/YYYY — auto-normalised |
+| `hour` | `6` | 0–23 |
+| `minutes_past_hour` | `0` | Any integer 0–59 |
+| `num_adults` | `2` | ≥ 0 |
+| `nesting_stage` | `no` | Short code → "No nest", "Nest building", etc. |
+| `bill_use` | `na` | Short code → "N/A or No", "Yes, handling a stick", etc. |
+| `flights` | `in;chg` | Semicolon-delimited short codes: `in`, `out`, `chg`, `non`. Empty = no flights. Legacy JSON arrays like `["in"]` still parse. |
+| `num_near_nest` | `1` | ≥ 0 |
+| `awake` | `y` | `y`, `n`, `mbe`, `nap` |
+| `notes` | `1 north, 1 west` | Free text |
 
-The project is modularly designed for reliability:
+Translation tables are in `src/darkwing/schema.py`.
 
-- **Orchestrator (`src/main_processor.py`):** The central coordinator managing the daily execution loop.
-- **Scheduler (`src/scheduler.py`):** A precision logic engine that calculates observation windows based on the 19-minute protocol.
-- **Core Engine (`src/analysis_engine.py`):** Handles real-time video processing, `reolinkapipy` integration, and AI inference for data point extraction.
-- **Logger:** Aggregates results into a finalized CSV log.
+## Project structure
 
-## 📜 The Protocol (Research Requirements)
+```
+src/darkwing/
+  schema.py       # Pydantic models + short-code → form-text tables
+  csv_io.py       # CSV read (DictReader) + JSON-Lines submission log
+  form_submit.py  # HTTP POST to Apps Script webhook
+  auth.py         # gcloud OAuth token retrieval + 50-min cache
+  cli.py          # argparse CLI (validate / submit)
+tests/
+  fixtures/sample_observation.csv   # tiny live CSV for tests
+  test_schema.py, test_csv_io.py,
+  test_form_submit.py, test_auth.py, test_cli.py
+docs/          # MkDocs (Material) site, deployed to GitHub Pages
+```
 
-To comply with research standards, the system's logic is bound by the following rules:
+## Tech
 
-1. **Timezone:** All systems operate in **EDT**.
-2. **Sampling Logic:** Checks are performed at three intervals per hour (XX:00, XX:20, and XX:40).
-3. **Data Integrity:** Each observation must be pulled over exactly a 19-minute window to ensure sufficient visual data for the AI processing layer.
+- **Python 3.14** (pinned in `.python-version`)
+- **pydantic v2** — row validation and short-code expansion
+- **requests** — HTTP POST to the Apps Script webhook
+- **python-dotenv** — reads `.env` for config
+- **pytest** — 92 tests covering schema, CSV I/O, auth, submission, and CLI
 
-## 📊 Data Schema
+## Docs site
 
-The output logs will include:
+Built with MkDocs (Material theme) and auto-deployed to GitHub Pages on every push to `main`. Local preview:
 
-- `TOWER_ID`, `DATE`, `SAMPLE_TIME`
-- `FIRST_DETECTION_TS`, `CONFIDENCE`
-- `ADULT_COUNT`, `NESTING_STAGE`
-- `BILL_ACTIVITY`, `FLIGHT_EVENTS`
-- `PROXIMMITY_COUNT`, `AWAKE_STATUS`
-- `BEHAVIORAL_FLAG` (Customer notes)
+```bash
+pip install mkdocs mkdocs-material
+mkdocs serve
+```
 
----
-*Developed for automated avian research and habitat analysis.*
+Navigate to <http://localhost:8000>.
+
+## Testing
+
+```bash
+.venv/bin/pytest -v
+```
+
+92 tests, all passing.
