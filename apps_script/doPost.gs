@@ -10,7 +10,7 @@
  *   - The Python side sends a Bearer token; the script runs in the
  *     deployer's context so the form submission is authenticated.
  *
- * Expected JSON payload keys (matches ObservationRecord.to_form_payload()):
+ * Expected JSON payload keys (clean, internal names from Python):
  *   - tower_id             (string)
  *   - date                 (string, e.g. "06/15/2026")
  *   - time_of_day          (string, e.g. "06:00")
@@ -21,7 +21,30 @@
  *   - swallows_near_nest   (integer)
  *   - awake                (string)
  *   - notes                (string)
+ *
+ * TITLE_MAP below translates these clean keys to the actual Google Form item
+ * titles. If a form question is renamed, update TITLE_MAP here — no Python
+ * changes needed.
  */
+
+/**
+ * Clean payload key → Google Form item title mapping.
+ *
+ * Update this when form questions are renamed; the Python side never needs
+ * to know the long titles.
+ */
+var TITLE_MAP = {
+  "tower_id": "Tower Number",
+  "date": "Date of footage being analyzed (please input date in this format M/D/YYYY)",
+  "time_of_day": "Approximate minutes after the hour. There should be three entries per hour. If no bird is in the chimney at 00, 20, or 40 then scan ahead, minute-by-minute to the next time when a bird is present.",
+  "adult_swallows_in_chimney": "How many adult Swifts are inside the chimney? Give your best guess.",
+  "nesting_stage": "Stage in the Nesting Cycle",
+  "bill_use": "Do any of the adults have something in their bill, or are using their bill?",
+  "adults_flew_in": "Did you observe any flight(s) going in or out of the chimney during the 1-minute video segment you watched? Did you observe any flights of Swifts inside the chimney, such as when they are changing position inside?",
+  "swallows_near_nest": "How many adults are within two body-lengths of the nest? Examples include sitting on nest, perched next to it, perched underneath it, or perched above it. If a group of Swifts are perched next to one another, include all of them in your count.",
+  "awake": "Are there any adults awake with eyes open?",
+  "notes": "Note any interesting behaviors not already included on this form. Include social interactions that could be characterized as courtship or aggressive. Do not try to interpret the behaviors; just state what you observed."
+};
 
 /**
  * Handle POST requests from the Python client.
@@ -44,13 +67,24 @@ function doPost(e) {
 
   var response = form.createResponse();
 
-  // Walk the form's items and match by exact title.
+  // Walk the form's items and match by clean key → title lookup.
   var items = form.getItems();
   var matched = 0;
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     var title = item.getTitle();
-    var value = payload[title];
+    // Find the clean key that maps to this title, then look up its value.
+    var cleanKey = null;
+    for (var key in TITLE_MAP) {
+      if (TITLE_MAP[key] === title) {
+        cleanKey = key;
+        break;
+      }
+    }
+    if (!cleanKey) {
+      continue; // Skip items not in TITLE_MAP (e.g. Email, Name)
+    }
+    var value = payload[cleanKey];
 
     if (value === undefined || value === null) {
       // Some fields may be optional — skip without error.

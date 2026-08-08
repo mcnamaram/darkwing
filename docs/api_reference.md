@@ -57,18 +57,17 @@ record = ObservationRecord.model_validate({
 
 # Expand to form payload
 payload = record.to_form_payload()
-# Keys are the exact Google Form item titles:
 # {
-#   "Tower Number": "Tower 3",
-#   "Date of footage being analyzed (please input date in this format M/D/YYYY)": "06/15/2026",
-#   "Approximate minutes after the hour...": "06:00",
-#   "How many adult Swifts are inside the chimney? Give your best guess.": 2,
-#   "Stage in the Nesting Cycle": "No nest",
-#   "Do any of the adults have something in their bill, or are using their bill?": "N/A or No",
-#   "Did you observe any flight(s)...": ["Yes, at least one adult flew into the chimney"],
-#   "How many adults are within two body-lengths...": 1,
-#   "Are there any adults awake with eyes open?": "Yes",
-#   "Note any interesting behaviors...": "1 north, 1 west",
+#   "tower_id": "Tower 3",
+#   "date": "06/15/2026",
+#   "time_of_day": "06:00",
+#   "adult_swallows_in_chimney": 2,
+#   "nesting_stage": "No nest",
+#   "bill_use": "N/A or No",
+#   "adults_flew_in": ["Yes, at least one adult flew into the chimney"],
+#   "swallows_near_nest": 1,
+#   "awake": "Yes",
+#   "notes": "1 north, 1 west",
 # }
 ```
 
