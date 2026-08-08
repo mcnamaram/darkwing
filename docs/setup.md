@@ -4,6 +4,7 @@
 
 - Python 3.14 or newer.
 - A Google account with access to the Google Form and the Google Apps Script deployment.
+- The `gcloud` CLI installed.
 - A local clone of this repository.
 
 ## 1. Clone and create a virtual environment
@@ -23,7 +24,7 @@ Verify the install:
 .venv/bin/pytest --collect-only
 ```
 
-The second command should report at least one test collected. If it reports `errors during collection`, your `src/darkwing/` package is not on the Python path — re-check that you are in the repo root and that the `src/` directory contains a `darkwing/` subdirectory with an `__init__.py`.
+The second command should report 92 tests collected. If it reports `errors during collection`, your `src/darkwing/` package is not on the Python path — re-check that you are in the repo root and that the `src/` directory contains a `darkwing/` subdirectory with an `__init__.py`.
 
 <a id="google-authentication"></a>
 
@@ -62,25 +63,26 @@ A successful run prints a long string (the access token) and exits 0. The token 
 Create a `.env` file in the repo root:
 
 ```bash
-cat > .env <<'EOF'
-DARKWING_APPS_SCRIPT_URL=https://script.google.com/macros/s/<your-deployment-id>/exec
-DARKWING_FORM_ID=<your-form-id>
-DARKWING_SUBMITTER_EMAIL=you@example.org
-DARKWING_SUBMITTER_NAME="Your Name"
-DARKWING_DEFAULT_TOWER=3
-EOF
-chmod 600 .env
+cp .env.example .env
+# Edit .env with your real values
 ```
 
-The `.env` file is gitignored. **Do not commit it.** See [Secrets Handling](./secrets_handling.md) for the full policy.
+Required variables:
 
-| Variable | Required | Purpose |
+| Variable | Purpose |
+| --- | --- |
+| `DARKWING_APPS_SCRIPT_URL` | The `/exec` URL of the deployed Apps Script `doPost` |
+| `DARKWING_FORM_ID` | The form ID (the long string in the form's URL) |
+| `DARKWING_SUBMITTER_EMAIL` | The email the form will record for each submission |
+| `DARKWING_SUBMITTER_NAME` | The name the form will record for each submission |
+
+Optional variables:
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `DARKWING_APPS_SCRIPT_URL` | yes | The `/exec` URL of the deployed Apps Script `doPost`. |
-| `DARKWING_FORM_ID` | yes | The form ID (the long string in the form's URL). |
-| `DARKWING_SUBMITTER_EMAIL` | yes | The email the form will record for each submission. |
-| `DARKWING_SUBMITTER_NAME` | yes | The name the form will record for each submission. |
-| `DARKWING_DEFAULT_TOWER` | no | The tower number to default to if a row's `tower` field is empty. Defaults to `3`. |
+| `DARKWING_DEFAULT_TOWER` | `3` | The tower number to default to if a row's `tower` field is empty |
+
+The `.env` file is gitignored. **Do not commit it.** See [Secrets Handling](./secrets_handling.md) for the full policy.
 
 ## 4. Run the test suite
 
@@ -88,12 +90,12 @@ The `.env` file is gitignored. **Do not commit it.** See [Secrets Handling](./se
 .venv/bin/pytest -v
 ```
 
-A clean install reports all tests passing. The test suite covers schema validation, CSV I/O, auth, submission, and the CLI façade.
+A clean install reports 92 tests passing. The test suite covers schema validation, CSV I/O, auth, submission, and the CLI.
 
 ## 5. Try a dry run
 
 ```bash
-.venv/bin/python -m darkwing submit tests/fixtures/valid_three_rows.csv --dry-run
+.venv/bin/darkwing submit tests/fixtures/sample_observation.csv --dry-run
 ```
 
 Expected output: a list of the rows that *would* be submitted, no actual POSTs to the Apps Script, and a `submitted_log.jsonl` either not created or empty.

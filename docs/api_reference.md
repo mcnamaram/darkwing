@@ -1,93 +1,121 @@
 # API Reference
 
-The Python package talks to one external endpoint: the Google Apps Script `doPost` webhook. This document specifies that contract.
+This document describes the public interface of the `darkwing` package. The CLI is the user-facing API; the Python functions are exposed for scripting and testing.
 
-## Apps Script `doPost`
+## CLI
 
-The script is hosted in the user's Google Apps Script editor and deployed as a *Web app* executing as the user, accessible to *Anyone in the organization with the link* (or stricter). The deployment's `/exec` URL is the value of `DARKWING_APPS_SCRIPT_URL` in the user's `.env` file. The script's project ID and the form ID it references are sensitive values; see [Secrets Handling](./secrets_handling.md).
-
-### Request
-
-```sh
-POST <DARKWING_APPS_SCRIPT_URL>
-Content-Type: application/json
-Authorization: Bearer <gcloud access token>
-
-{ ... JSON payload, see below ... }
+```
+darkwing {validate,submit} path/to/file.csv [OPTIONS]
 ```
 
-### Response (success)
+### `validate`
 
-```sh
-HTTP/1.1 200 OK
-Content-Type: application/json
+Reads and validates a CSV against the Pydantic schema. Prints a summary and exits 0 on success, 1 on error.
 
-{"status": "success", "response": {"matched": <N>}}
+```bash
+darkwing validate observations.csv
 ```
 
-### Response (script error)
+### `submit`
 
-```sh
-HTTP/1.1 200 OK
-Content-Type: application/json
+Validates, expands short codes, and POSTs each row to the Apps Script webhook.
 
-{"status": "error", "message": "<error string from Apps Script>"}
+```bash
+darkwing submit observations.csv                  # submit for real
+darkwing submit observations.csv --dry-run        # preview only
 ```
 
-### The script's role
+### `--help`
 
-The script is a thin pass-through wrapper. It receives a flat JSON object, walks the form's items, and for each item it finds a matching key in the JSON (by `getTitle()`), it sets the appropriate `FormApp.ItemResponse` based on the item's `getType()`. The script handles `TEXT`, `PARAGRAPH_TEXT`, `MULTIPLE_CHOICE`, `CHECKBOX`, `LIST`, and the date/time item sub-shapes. The Python side does all the title lookup, all the type coercion, all the translation-table expansion. The script does not contain a translation table of its own.
-
-A reference implementation lives at `apps_script/doPost.gs` in this repository.
-
-## JSON payload shape
-
-The Python package sends a flat JSON object with one key per form question, where each key is the form question's title exactly as displayed. The full key list, with example values, is:
-
-```json
-{
-  "Email": "submitter@example.org",
-  "Name (first, last) of Individual Collecting Data": "Submitting Volunteer",
-  "Tower Number": "Tower 3",
-  "Date of footage being analyzed (please input date in this format M/D/YYYY)": "6/15/2026",
-  "Hour of footage being analyzed. Enter numbers in 24-hr time, i.e., 0 = 12am, 1 = 1am, 12 = 1pm, 13 = 1pm": 13,
-  "Approximate minutes after the hour. There should be three entries per hour. If no bird is in the chimney at 00, 20, or 40 then scan ahead, minute-by-minute to the next time when a bird is present.": 40,
-  "How many adult Swifts are inside the chimney? Give your best guess.": 2,
-  "Stage in the Nesting Cycle": "No nest",
-  "Do any of the adults have something in their bill, or are using their bill?": "N/A or No",
-  "Did you observe any flight(s) going in or out of the chimney during the 1-minute video segment you watched? Did you observe any flights of Swifts inside the chimney, such as when they are changing position inside? (Please select at most 3 options.)": [
-    "Yes, at least one adult flew into the chimney",
-    "Yes, at least one adult changed position within the chimney but did not enter or exit"
-  ],
-  "How many adults are within two body-lengths of the nest? Examples include sitting on nest, perched next to it, perched underneath it, or perched above it. If a group of Swifts are perched next to one another, include all of them in your count.": 1,
-  "Are there any adults awake with eyes open?": "Yes",
-  "Note any interesting behaviors not already included on this form. Include social interactions that could be characterized as courtship or aggressive. Do not try to interpret the behaviors; just state what happened, giving as much detail as possible.": "1 north, 1 west. west moved to north"
-}
+```bash
+darkwing --help
+darkwing validate --help
+darkwing submit --help
 ```
 
-These exact titles live in the form definition; changing the form changes these strings and requires a matching change in `to_form_payload()`. The package's tests assert the title strings so a form change is caught at test time, not at submission time.
+## Python API
 
-The short codes that the user types in the CSV are translated into the form's full text by the `to_form_payload()` method on the `ObservationRecord` class. The translation table is documented in the [Architecture document](./architecture.md#csv-schema-and-translation-table).
+### `darkwing.schema.ObservationRecord`
 
-## Sub-fields (Date, Time)
+```python
+from darkwing.schema import ObservationRecord
 
-The form's *Date of footage being analyzed* question accepts a date string in the format the user has prefilled in the form's example field: `M/D/YYYY`. The Python code sends it as a single string; the form's `DateItem` accepts that string directly.
+# Validate a row dict (e.g. from csv.DictReader)
+record = ObservationRecord.model_validate({
+    "tower": "3",
+    "date_str": "6/15/2026",
+    "hour": "6",
+    "minutes_past_hour": "0",
+    "num_adults": "2",
+    "nesting_stage": "no",
+    "bill_use": "na",
+    "flights": "in;chg",           # semicolon-delimited
+    "num_near_nest": "1",
+    "awake": "y",
+    "notes": "1 north, 1 west",
+})
 
-The form's *Hour* and *Minutes past hour* questions are sent as integers. The form's `TimeItem` accepts integers in the `0–23` and `{0, 20, 40}` ranges respectively.
+# Expand to form payload
+payload = record.to_form_payload()
+# {
+#   "tower_id": "Tower 3",
+#   "date": "06/15/2026",
+#   "time_of_day": "06:00",
+#   "adult_swallows_in_chimney": 2,
+#   "nesting_stage": "No nest",
+#   "bill_use": "N/A or No",
+#   "adults_flew_in": ["Yes, at least one adult flew into the chimney",
+#                      "Yes, at least one adult changed position..."],
+#   "swallows_near_nest": 1,
+#   "awake": "Yes",
+#   "notes": "1 north, 1 west",
+# }
+```
 
-## Authentication
+### `darkwing.csv_io`
 
-The bearer token is retrieved by shelling out to `gcloud auth print-access-token`. The token is short-lived (60 minutes); the package caches it for 50 minutes. On a 401 response, the package refreshes the token once and retries; a second 401 stops the batch with a clear error.
+```python
+from darkwing.csv_io import read_csv, write_submission_log, get_submission_log
+from pathlib import Path
 
-See [Setup](./setup.md#google-authentication) for the one-time authentication flow.
+# Read and validate
+records = read_csv(Path("observations.csv"))
 
-## Why the Apps Script, not the Google Forms API
+# Append to submission log
+write_submission_log(records, Path("submitted_log.jsonl"))
 
-The Google Forms API (the `forms.responses` collection) targets the new Google Forms product, whose form IDs are short opaque strings (e.g. `1abcXYZ…`). The form in this project is a Classic Google Form, whose URL contains the longer `1FAIpQLS…` prefix. The Forms API does not support submitting responses to Classic Forms.
+# Read log back
+log = get_submission_log(Path("submitted_log.jsonl"))
+```
 
-Two alternative paths were considered and rejected:
+### `darkwing.form_submit`
 
-- **Migrate the form to the new product.** A one-time effort, but disruptive to any existing responses and to any other consumer of the form.
-- **POST directly to the form's `formResponse` endpoint.** Fragile — the endpoint requires fresh CSRF tokens and session cookies, and breaks whenever Google changes the form UI. This is what the `googleforms` curl capture was attempting.
+```python
+from darkwing.form_submit import submit_record, submit_csv_records
 
-The Apps Script `doPost` path is the lowest-risk option that works with the existing form and the user's existing authenticated session.
+# Submit one record
+result = submit_record(record)
+# {"uuid": "...", "status": "success", ...}
+
+# Submit many records
+results = submit_csv_records(records, dry_run=False)
+```
+
+### `darkwing.auth`
+
+```python
+from darkwing.auth import get_token
+
+token = get_token()  # returns cached token or refreshes from gcloud
+```
+
+## Short-code translation tables
+
+These constants are exported from `darkwing.schema` for reference:
+
+| Constant | Type | Values |
+|---|---|---|
+| `FLIGHTS_TRANSLATION` | `Dict[str, str]` | `in`, `out`, `chg`, `non` |
+| `NESTING_STAGE_CODE_TO_TEXT` | `Dict[str, str]` | `no`, `bld`, `egg`, `nst`, `fld` |
+| `BILL_USE_CODE_TO_TEXT` | `Dict[str, str]` | `na`, `mat`, `fd`, `egg`, `nst`, `ps`, `po`, `oth` |
+| `AWAKE_CODE_TO_TEXT` | `Dict[str, str]` | `y`, `n`, `mbe`, `nap` |

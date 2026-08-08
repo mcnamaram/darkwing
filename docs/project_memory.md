@@ -18,13 +18,13 @@
 | 2 | CSV I/O | ✅ done | `src/darkwing/csv_io.py` — read CSV, write submission log |
 | 3 | Auth | ✅ done | `src/darkwing/auth.py` — gcloud token retrieval with 50-min cache |
 | 4 | Form submit | ✅ done | `src/darkwing/form_submit.py` — POST to Apps Script webhook |
-| 5 | CLI + notebook | ✅ done (CLI) | `src/darkwing/cli.py` — `darkwing validate/submit`. Notebook TBD |
+| 5 | CLI + notebook | ✅ done (CLI) | `src/darkwing/cli.py` — `darkwing validate/submit`. Notebook not yet created. |
 | 6 | Apps Script | ✅ done | `apps_script/doPost.gs` — reference handler for all form item types |
 | 7 | Manual smoke | 🟠 blocked | One real run against the live form (needs user to deploy Apps Script) |
 
 **Legend:** ⬜ not started · ✅ done · 🟡 in progress · 🟠 blocked
 
-**Test coverage:** 81 tests, all green. See [Test Strategy](./test_strategy.md).
+**Test coverage:** 92 tests, all green. See [Test Strategy](./test_strategy.md).
 
 ---
 

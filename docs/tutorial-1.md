@@ -1,12 +1,12 @@
 # Tutorial: Your First Submission
 
-This tutorial walks a new user through submitting a small CSV of observation rows to the Google Form. By the end, you will have a `submitted_log.jsonl` file recording each attempt and (assuming the Apps Script `doPost` is in its extended form) two new entries in the form's responses sheet.
+This tutorial walks a new user through submitting a small CSV of observation rows to the Google Form. By the end, you will have a `submitted_log.jsonl` file recording each attempt and (assuming the Apps Script `doPost` is deployed) new entries in the form's responses sheet.
 
 ## Prerequisites
 
 You have followed [Setup](./setup.md) and have:
 
-- An active `.venv` with the package's dependencies installed.
+- An active `.venv` with the package installed (`pip install -e .`).
 - A `.env` file with the required `DARKWING_*` variables set.
 - A working `gcloud auth print-access-token` (verified by running it in a shell).
 
@@ -16,24 +16,24 @@ Create a file at `~/Desktop/test_observations.csv` with these contents:
 
 ```csv
 tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
-3,6/15/2026,6,0,2,no,na,in;chg,1,y,"Test row 1"
+3,6/15/2026,6,0,2,no,na,in;chg,1,y,1 north, 1 west. west moved to north
 3,6/15/2026,6,20,0,no,na,non,0,nap,
 ```
 
-The column names are exactly what `to_form_payload()` expects. `flights` is a semicolon-delimited list of short codes (e.g. `in` or `in;out`); `num_adults` is an integer; `awake` accepts the four enum values exactly as the form spells them.
+The column names are exactly what `to_form_payload()` expects. `flights` uses semicolon-delimited short codes (e.g. `in` or `in;out`); `num_adults` is an integer; `awake` accepts the four enum values exactly as the form spells them.
 
 ## 2. Validate the CSV
 
 ```bash
-.venv/bin/python -m darkwing validate ~/Desktop/test_observations.csv
+.venv/bin/darkwing validate ~/Desktop/test_observations.csv
 ```
 
-Expected output: `2 rows validated, 0 errors.` If you see schema errors, the message points at the offending row and column.
+Expected output: `2 row(s) validated successfully.` If you see schema errors, the message points at the offending row and column.
 
 ## 3. Dry-run the submission
 
 ```bash
-.venv/bin/python -m darkwing submit ~/Desktop/test_observations.csv --dry-run
+.venv/bin/darkwing submit ~/Desktop/test_observations.csv --dry-run
 ```
 
 Expected output: a table of the two rows that *would* be submitted, with their target form fields. No network calls. No log file written.
@@ -41,36 +41,32 @@ Expected output: a table of the two rows that *would* be submitted, with their t
 ## 4. Submit for real
 
 ```bash
-.venv/bin/python -m darkwing submit ~/Desktop/test_observations.csv
+.venv/bin/darkwing submit ~/Desktop/test_observations.csv
 ```
 
 Expected output:
 
-```sh
-[1/2] submitting uuid=… timestamp_utc=2026-06-15T10:00:00Z → 200
-[2/2] submitting uuid=… timestamp_utc=2026-06-15T10:20:00Z → 200
-done: 2 submitted, 0 skipped, 0 errors
-log: ./submitted_log.jsonl
+```
+Submitting 2 record(s) to the form...
+[1/2] uuid=… status=200
+[2/2] uuid=… status=200
+✓ 2/2 record(s) submitted.
 ```
 
-Open `submitted_log.jsonl` to see one JSON line per attempt.
+Each row is posted individually. A `submitted_log.jsonl` file is created in the repo root with one JSON line per attempt.
 
-## 5. Verify in the form
-
-Open the target Google Form's responses sheet. You should see two new rows corresponding to your submission. The form's `Email`, `Name`, and `Tower Number` columns are filled from your `.env` configuration; the data columns are filled from the CSV.
-
-## 6. Re-running safely
-
-`submitted_log.jsonl` is the system's source of truth for "what has been sent." Re-running the same submit command without `--force` will skip the rows that are already in the log:
+## 5. Inspect the log
 
 ```bash
-.venv/bin/python -m darkwing submit ~/Desktop/test_observations.csv
-# → done: 0 submitted, 0 skipped, 0 errors
-# → log: ./submitted_log.jsonl
+cat submitted_log.jsonl | head
 ```
 
-To re-submit a row deliberately, edit it in the CSV and re-run with `--force`, or delete the corresponding line from `submitted_log.jsonl`.
+Each line is a JSON object: `{uuid, timestamp_utc, tower, time_of_day, http_status, attempt_count, error?}`.
 
-## 7. The notebook alternative
+## Troubleshooting
 
-If you prefer a notebook interface, open `notebooks/01_submit_existing_csv.ipynb`. It exposes the same five steps as cells: imports, validate, summarize, submit with progress, and final log location. The notebook is a thin wrapper around the same `darkwing.csv_io` and `darkwing.form_submit` modules that the CLI uses.
+**"DARKWING_APPS_SCRIPT_URL not set"** — Check that `.env` exists and contains the variable. Run `gcloud auth print-access-token` to verify your token is fresh.
+
+**401/403 from the webhook** — Your Google account may not have access to the form or the Apps Script deployment. Re-run `gcloud auth login` and verify the account matches the one that deployed the script.
+
+**Schema errors** — The CSV column names must match exactly (case-sensitive). The `flights` column accepts semicolons (`in;out`) or JSON arrays (`["in","out"]`) for backwards compatibility.

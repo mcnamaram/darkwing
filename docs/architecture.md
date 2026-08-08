@@ -2,18 +2,17 @@
 
 ## What this system is
 
-DarkWing is a single-process Python package plus a Jupyter notebook entry point. It reads a CSV of curated observations, validates each row, expands short codes into the form's long-form text, and POSTs the rows one at a time to a Google Apps Script `doPost` webhook. The webhook constructs and submits Google Form responses on behalf of the authenticated user. A local JSON-Lines log file (`submitted_log.jsonl`) is the only artifact that persists between runs.
+DarkWing is a single-process Python package. It reads a CSV of curated observations, validates each row, expands short codes into the form's long-form text, and POSTs the rows one at a time to a Google Apps Script `doPost` webhook. The webhook constructs and submits Google Form responses on behalf of the authenticated user. A local JSON-Lines log file (`submitted_log.jsonl`) is the only artifact that persists between runs.
 
 ## Components
 
 | Component | Path | Role |
 | --- | --- | --- |
 | Schema | `src/darkwing/schema.py` | Pydantic models and the short-code → form-text translation table. |
-|| CSV I/O | `src/darkwing/csv_io.py` | Reads the curated CSV; parses the `flights` column (semicolon-delimited short codes, e.g. `in;out`); appends to the submission log. |
+| CSV I/O | `src/darkwing/csv_io.py` | Reads the curated CSV; parses the `flights` column (semicolon-delimited short codes, e.g. `in;out`); appends to the submission log. |
 | Auth | `src/darkwing/auth.py` | Retrieves a Google OAuth bearer token via `gcloud auth print-access-token`. Caches for 50 minutes. |
 | Submit | `src/darkwing/form_submit.py` | Translates a record into form-ready JSON, POSTs it to the Apps Script URL with `Authorization: Bearer <token>`. |
-| CLI | `src/darkwing/cli.py` | `python -m darkwing {submit,validate} path/to/file.csv [--dry-run] [--force]`. |
-| Notebook | `notebooks/01_submit_existing_csv.ipynb` | The user-facing entry point. Five cells. |
+| CLI | `src/darkwing/cli.py` | `darkwing {submit,validate} path/to/file.csv [--dry-run]`. |
 | Apps Script | Owned by the user, hosted at `script.google.com` | Receives JSON, builds a `FormApp.createResponse()`, calls `.submit()`. Handles all form item types. |
 
 The Python code owns the *content* of the submission — the field titles, the translation table, the validation. The Apps Script owns the *transport* — the `FormApp` API call that the user's authenticated session can make. This split keeps the script small and low-risk; if the form changes, the Python code changes; if the Apps Script API changes, the script changes.
@@ -60,7 +59,7 @@ The CSV has eleven columns. Five are short-code columns with fixed-value transla
 | Column | Type | Range / format | Notes |
 | --- | --- | --- | --- |
 | `hour` | int | `[0, 23]` | 24-hour clock. |
-| `minutes_past_hour` | int | `{0, 20, 40}` | Three discrete values per hour. |
+| `minutes_past_hour` | int | `[0, 59]` | Any integer. |
 | `num_adults` | int | `≥ 0` | Free integer; the form allows up to 10 in the radio list and an "Other" freeform. |
 | `num_near_nest` | int | `≥ 0` | Same shape as `num_adults`. |
 
