@@ -20,6 +20,33 @@ to a Google Form.
    DARKWING_APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
    ```
 
+## Deployment via CI/CD
+
+This project includes a GitHub Actions workflow (`.github/workflows/deploy-apps-script.yml`) that automatically deploys the Apps Script when `doPost.gs` changes.
+
+### Required GitHub Secrets
+
+| Secret | Description | How to get |
+|--------|-------------|------------|
+| `CLASP_ACCESS_TOKEN` | OAuth access token | Run `clasp login` locally, then cat `~/.clasprc.json` |
+| `CLASP_REFRESH_TOKEN` | OAuth refresh token | Same as above |
+| `CLASP_CLIENT_ID` | OAuth client ID | From Google Cloud Console |
+| `CLASP_CLIENT_SECRET` | OAuth client secret | From Google Cloud Console |
+
+### Setup
+
+1. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → OAuth client ID
+2. Enable the Apps Script API and Drive API
+3. Run `clasp login` locally to get tokens
+4. Add the secrets to your GitHub repository settings
+
+### Trigger
+
+The workflow runs on push to `main` when these paths change:
+- `apps_script/doPost.gs`
+- `apps_script/appscript.json`
+- `.github/workflows/deploy-apps-script.yml`
+
 ## What the script does
 
 - Receives a flat JSON object from the Python package with clean keys.
