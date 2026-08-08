@@ -1,0 +1,46 @@
+name: Deploy Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps_script/doPost.gs'
+      - 'apps_script/appscript.json'
+      - '.github/workflows/deploy-apps-script.yml'
+
+# Prevent concurrent deployments
+concurrency:
+  group: "apps-script-deploy"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Google Apps Script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install clasp
+        run: npm install -g @google/clasp
+
+      - name: Authenticate with clasp
+        run: |
+          echo "${{ secrets.CLASP_CREDENTIALS }}" > /tmp/credentials.json
+          echo "{\"access_token\":\"${{ secrets.CLASP_ACCESS_TOKEN }}\",\"refresh_token\":\"${{ secrets.CLASP_REFRESH_TOKEN }}\",\"client_id\":\"${{ secrets.CLASP_CLIENT_ID }}\",\"client_secret\":\"${{ secrets.CLASP_CLIENT_SECRET }}\",\"expires_in\":3600}" > .clasprc.json
+          cat .clasprc.json
+
+      - name: Push to Apps Script
+        run: clasp push --rootDir apps_script
+
+      - name: Create version and deploy
+        run: |
+          clasp deploy --description "Deployed from GitHub Actions on ${{ github.sha }}"
+
+      - name: Get deployment URL
+        run: clasp list
