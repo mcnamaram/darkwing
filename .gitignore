@@ -53,4 +53,5 @@ __pycache__/
 *token*
 *cookie*
 !secrets_handling.md
-obs.csv
+obs.csvnode_modules/
+.hermes/cache/

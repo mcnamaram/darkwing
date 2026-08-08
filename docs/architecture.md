@@ -19,6 +19,8 @@ The Python code owns the *content* of the submission — the field titles, the t
 
 ## Data flow
 
+![Architecture flow: CSV → validate → translate → POST → Apps Script](img/architecture_flow.svg)
+
 ```ascii
 curated CSV
    │  one row per observation (45 rows per day per tower)

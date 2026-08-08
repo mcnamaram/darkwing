@@ -57,6 +57,10 @@ One test per rule, with a positive case and (where applicable) a negative case.
 
 The fixture `tests/fixtures/sample_observation.csv` is a real CSV with four rows covering common cases: single flight, multiple flights, empty flights, and no adults present. It is used by both `test_csv_io.py` and `test_cli.py`.
 
+## Validation pipeline
+
+![Validation state machine: raw CSV row → type coercion → domain check → ObservationRecord or ValidationError](img/validation_state.svg)
+
 ## Running the suite
 
 ```bash
