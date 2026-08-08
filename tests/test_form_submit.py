@@ -72,9 +72,10 @@ def test_submit_record_posts_to_webhook(sample_record, mock_env):
     args, kwargs = mock_post.call_args
     assert args[0] == "https://script.google.com/macros/s/test/exec"
     assert kwargs["headers"] == {"Authorization": "Bearer test-token"}
+    from darkwing.schema import FORM_TITLE_MAP
     payload = kwargs["json"]
-    assert payload["tower_id"] == "Tower 3"
-    assert payload["adult_swallows_in_chimney"] == 2
+    assert payload[FORM_TITLE_MAP["tower_id"]] == "Tower 3"
+    assert payload[FORM_TITLE_MAP["adult_swallows_in_chimney"]] == 2
     assert result == {"status": "success", "response_id": "abc123"}
 
 

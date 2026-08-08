@@ -11,9 +11,9 @@
  *     deployer's context so the form submission is authenticated.
  *
  * Expected JSON payload keys (matches ObservationRecord.to_form_payload()):
+ *   - tower_id             (string)
  *   - date                 (string, e.g. "06/15/2026")
  *   - time_of_day          (string, e.g. "06:00")
- *   - tower_id             (string)
  *   - adult_swallows_in_chimney (integer)
  *   - nesting_stage        (string)
  *   - bill_use             (string)
@@ -44,12 +44,12 @@ function doPost(e) {
 
   var response = form.createResponse();
 
-  // Walk the form's items and match by title (case-insensitive).
+  // Walk the form's items and match by exact title.
   var items = form.getItems();
   var matched = 0;
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
-    var title = item.getTitle().toLowerCase().replace(/\s+/g, "_");
+    var title = item.getTitle();
     var value = payload[title];
 
     if (value === undefined || value === null) {

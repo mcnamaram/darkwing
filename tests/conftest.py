@@ -48,19 +48,20 @@ def sample_csv_rows() -> List[Dict[str, str]]:
 @pytest.fixture
 def apps_script_payload() -> Dict:
     """What form_submit expects to POST to the Apps Script webhook."""
+    from darkwing.schema import FORM_TITLE_MAP
     return {
-        "tower_id": "Tower 3",
-        "date": "6/15/2026",
-        "time_of_day": "6:00",
-        "adult_swallows_in_chimney": 2,
-        "nesting_stage": "No nest",
-        "bill_use": "N/A or No",
-        "adults_flew_in": [
+        FORM_TITLE_MAP["tower_id"]: "Tower 3",
+        FORM_TITLE_MAP["date"]: "6/15/2026",
+        FORM_TITLE_MAP["time_of_day"]: "06:00",
+        FORM_TITLE_MAP["adult_swallows_in_chimney"]: 2,
+        FORM_TITLE_MAP["nesting_stage"]: "No nest",
+        FORM_TITLE_MAP["bill_use"]: "N/A or No",
+        FORM_TITLE_MAP["adults_flew_in"]: [
             "Yes, at least one adult flew into the chimney"
         ],
-        "swallows_near_nest": 1,
-        "awake": "Yes",
-        "notes": "1 north, 1 west. west moved to north",
+        FORM_TITLE_MAP["swallows_near_nest"]: 1,
+        FORM_TITLE_MAP["awake"]: "Yes",
+        FORM_TITLE_MAP["notes"]: "1 north, 1 west. west moved to north",
     }
 
 

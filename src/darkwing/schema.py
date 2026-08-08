@@ -49,6 +49,22 @@ NESTING_STAGE_CODES = set(NESTING_STAGE_CODE_TO_TEXT.keys())
 BILL_USE_CODES = set(BILL_USE_CODE_TO_TEXT.keys())
 AWAKE_CODES = set(AWAKE_CODE_TO_TEXT.keys())
 
+# ── Form item title mapping ────────────────────────────────────────────────────
+# Maps internal payload keys to the exact long-form text used as Google Form
+# item titles. This avoids fragile title-matching in the Apps Script.
+FORM_TITLE_MAP: Dict[str, str] = {
+    "tower_id": "Tower Number",
+    "date": "Date of footage being analyzed (please input date in this format M/D/YYYY)",
+    "time_of_day": "Approximate minutes after the hour. There should be three entries per hour. If no bird is in the chimney at 00, 20, or 40 then scan ahead, minute-by-minute to the next time when a bird is present.",
+    "adult_swallows_in_chimney": "How many adult Swifts are inside the chimney? Give your best guess.",
+    "nesting_stage": "Stage in the Nesting Cycle",
+    "bill_use": "Do any of the adults have something in their bill, or are using their bill?",
+    "adults_flew_in": "Did you observe any flight(s) going in or out of the chimney during the 1-minute video segment you watched? Did you observe any flights of Swifts inside the chimney, such as when they are changing position inside?",
+    "swallows_near_nest": "How many adults are within two body-lengths of the nest? Examples include sitting on nest, perched next to it, perched underneath it, or perched above it. If a group of Swifts are perched next to one another, include all of them in your count.",
+    "awake": "Are there any adults awake with eyes open?",
+    "notes": "Note any interesting behaviors not already included on this form. Include social interactions that could be characterized as courtship or aggressive. Do not try to interpret the behaviors; just state what you observed.",
+}
+
 
 # ── ObservationRecord ──────────────────────────────────────────────────────────
 
@@ -170,20 +186,25 @@ class ObservationRecord(BaseModel):
         return table[code]
 
     def to_form_payload(self) -> Dict[str, object]:
-        """Translate this record into the shape the Apps Script webhook expects."""
+        """Translate this record into the shape the Apps Script webhook expects.
+
+        Keys are the *exact* Google Form item titles (from FORM_TITLE_MAP), so
+        the Apps Script can do a direct payload[title] lookup with no
+        normalization logic.
+        """
         return {
-            "tower_id": f"Tower {self.tower}",
-            "date": self.date_str,
-            "time_of_day": self.time_of_day,
-            "adult_swallows_in_chimney": self.num_adults,
-            "nesting_stage": self._expand(self.nesting_stage, NESTING_STAGE_CODE_TO_TEXT),
-            "bill_use": self._expand(self.bill_use, BILL_USE_CODE_TO_TEXT),
-            "adults_flew_in": [
+            FORM_TITLE_MAP["tower_id"]: f"Tower {self.tower}",
+            FORM_TITLE_MAP["date"]: self.date_str,
+            FORM_TITLE_MAP["time_of_day"]: self.time_of_day,
+            FORM_TITLE_MAP["adult_swallows_in_chimney"]: self.num_adults,
+            FORM_TITLE_MAP["nesting_stage"]: self._expand(self.nesting_stage, NESTING_STAGE_CODE_TO_TEXT),
+            FORM_TITLE_MAP["bill_use"]: self._expand(self.bill_use, BILL_USE_CODE_TO_TEXT),
+            FORM_TITLE_MAP["adults_flew_in"]: [
                 FLIGHTS_TRANSLATION[code] for code in self.flights
             ],
-            "swallows_near_nest": self.num_near_nest,
-            "awake": self._expand(self.awake, AWAKE_CODE_TO_TEXT),
-            "notes": self.notes or "",
+            FORM_TITLE_MAP["swallows_near_nest"]: self.num_near_nest,
+            FORM_TITLE_MAP["awake"]: self._expand(self.awake, AWAKE_CODE_TO_TEXT),
+            FORM_TITLE_MAP["notes"]: self.notes or "",
         }
 
 

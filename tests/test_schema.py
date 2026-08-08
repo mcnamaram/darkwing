@@ -229,9 +229,10 @@ def test_nesting_stage_valid(code: str, expected: str):
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
     })
+    from darkwing.schema import FORM_TITLE_MAP
     assert r.nesting_stage == code  # stores short code
     # to_form_payload expands it
-    assert r.to_form_payload()["nesting_stage"] == expected
+    assert r.to_form_payload()[FORM_TITLE_MAP["nesting_stage"]] == expected
 
 def test_nesting_stage_invalid_rejected():
     with pytest.raises(ValueError, match="nesting_stage"):
@@ -265,7 +266,8 @@ def test_bill_use_valid(code: str, expected: str):
         "awake": "y", "notes": None,
     })
     assert r.bill_use == code
-    assert r.to_form_payload()["bill_use"] == expected
+    from darkwing.schema import FORM_TITLE_MAP
+    assert r.to_form_payload()[FORM_TITLE_MAP["bill_use"]] == expected
 
 def test_bill_use_invalid_rejected():
     with pytest.raises(ValueError, match="bill_use"):
@@ -295,7 +297,8 @@ def test_flights_single_code(code: str, expected: str):
         "num_near_nest": "0", "awake": "y", "notes": None,
     })
     assert r.flights == [code]
-    assert r.to_form_payload()["adults_flew_in"] == [expected]
+    from darkwing.schema import FORM_TITLE_MAP
+    assert r.to_form_payload()[FORM_TITLE_MAP["adults_flew_in"]] == [expected]
 
 def test_flights_empty_list():
     r = ObservationRecord.model_validate({
@@ -388,7 +391,8 @@ def test_awake_valid(code: str, expected: str):
         "awake": code, "notes": None,
     })
     assert r.awake == code
-    assert r.to_form_payload()["awake"] == expected
+    from darkwing.schema import FORM_TITLE_MAP
+    assert r.to_form_payload()[FORM_TITLE_MAP["awake"]] == expected
 
 def test_awake_invalid_rejected():
     with pytest.raises(ValueError, match="awake"):
@@ -488,17 +492,19 @@ def test_translation_table_keys():
 
 def test_to_form_payload_expands_all_codes(valid_record: ObservationRecord, apps_script_payload: dict):
     payload = valid_record.to_form_payload()
-    assert payload["adults_flew_in"] == ["Yes, at least one adult flew into the chimney"]
-    assert payload["tower_id"] == "Tower 3"
-    assert payload["date"] == "06/15/2026"
-    assert payload["time_of_day"] == "06:00"
-    assert payload["adult_swallows_in_chimney"] == 2
-    assert payload["nesting_stage"] == "No nest"
-    assert payload["bill_use"] == "N/A or No"
-    assert payload["awake"] == "Yes"
-    assert payload["notes"] == "1 north, 1 west. west moved to north"
+    from darkwing.schema import FORM_TITLE_MAP
+    assert payload[FORM_TITLE_MAP["adults_flew_in"]] == ["Yes, at least one adult flew into the chimney"]
+    assert payload[FORM_TITLE_MAP["tower_id"]] == "Tower 3"
+    assert payload[FORM_TITLE_MAP["date"]] == "06/15/2026"
+    assert payload[FORM_TITLE_MAP["time_of_day"]] == "06:00"
+    assert payload[FORM_TITLE_MAP["adult_swallows_in_chimney"]] == 2
+    assert payload[FORM_TITLE_MAP["nesting_stage"]] == "No nest"
+    assert payload[FORM_TITLE_MAP["bill_use"]] == "N/A or No"
+    assert payload[FORM_TITLE_MAP["awake"]] == "Yes"
+    assert payload[FORM_TITLE_MAP["notes"]] == "1 north, 1 west. west moved to north"
 
 def test_to_form_payload_empty_flights():
+    from darkwing.schema import FORM_TITLE_MAP
     r = ObservationRecord.model_validate({
         "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
         "num_adults": "0",
@@ -507,10 +513,11 @@ def test_to_form_payload_empty_flights():
         "awake": "y", "notes": "hello",
     })
     payload = r.to_form_payload()
-    assert payload["adults_flew_in"] == []
-    assert payload["notes"] == "hello"
+    assert payload[FORM_TITLE_MAP["adults_flew_in"]] == []
+    assert payload[FORM_TITLE_MAP["notes"]] == "hello"
 
 def test_to_form_payload_notes_none_becomes_empty_string():
+    from darkwing.schema import FORM_TITLE_MAP
     r = ObservationRecord.model_validate({
         "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
         "num_adults": "0",
@@ -519,9 +526,13 @@ def test_to_form_payload_notes_none_becomes_empty_string():
         "awake": "y", "notes": None,
     })
     payload = r.to_form_payload()
-    assert payload["notes"] == ""
+    assert payload[FORM_TITLE_MAP["adults_flew_in"]] == []
+    from darkwing.schema import FORM_TITLE_MAP
+    assert payload[FORM_TITLE_MAP["notes"]] == ""
+    assert payload[FORM_TITLE_MAP["notes"]] == ""
 
 def test_to_form_payload_multi_flight_expansion():
+    from darkwing.schema import FORM_TITLE_MAP
     r = ObservationRecord.model_validate({
         "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
         "num_adults": "1",
@@ -530,13 +541,13 @@ def test_to_form_payload_multi_flight_expansion():
         "num_near_nest": "2", "awake": "mbe", "notes": None,
     })
     payload = r.to_form_payload()
-    assert payload["adults_flew_in"] == [
+    assert payload[FORM_TITLE_MAP["adults_flew_in"]] == [
         "Yes, at least one adult flew into the chimney",
         "Yes, at least one adult flew out of the chimney",
     ]
-    assert payload["nesting_stage"] == "Egg(s) present but no nestlings"
-    assert payload["bill_use"] == "Yes, handling or placing a stick or nest material"
-    assert payload["awake"] == "Maybe"
+    assert payload[FORM_TITLE_MAP["nesting_stage"]] == "Egg(s) present but no nestlings"
+    assert payload[FORM_TITLE_MAP["bill_use"]] == "Yes, handling or placing a stick or nest material"
+    assert payload[FORM_TITLE_MAP["awake"]] == "Maybe"
 
 
 # ── 16. parse_observation_row helper ──────────────────────────────────────────

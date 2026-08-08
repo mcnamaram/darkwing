@@ -23,7 +23,7 @@ to a Google Form.
 ## What the script does
 
 - Receives a flat JSON object from the Python package.
-- Matches each JSON key to a Google Form item by title (case-insensitive, spaces → underscores).
+- Matches each JSON key to a Google Form item by **exact title** (no normalization needed).
 - Handles all common form item types: `TEXT`, `PARAGRAPH_TEXT`, `MULTIPLE_CHOICE`,
   `CHECKBOX`, `LIST`, `DATE`, `TIME`, `DATE_TIME`.
 - Submits the response using the deployer's authenticated session.
@@ -31,20 +31,20 @@ to a Google Form.
 
 ## Payload shape
 
-The Python side sends the output of `ObservationRecord.to_form_payload()`:
+The Python side sends the output of `ObservationRecord.to_form_payload()`. Keys are the **exact** Google Form item titles — no normalization is performed in the Apps Script:
 
 ```json
 {
-  "tower_id": "Tower 3",
-  "date": "06/15/2026",
-  "time_of_day": "06:00",
-  "adult_swallows_in_chimney": 2,
-  "nesting_stage": "No nest",
-  "bill_use": "N/A or No",
-  "adults_flew_in": ["Yes, at least one adult flew into the chimney"],
-  "swallows_near_nest": 1,
-  "awake": "Yes",
-  "notes": "1 north, 1 west."
+  "Tower Number": "Tower 3",
+  "Date of footage being analyzed (please input date in this format M/D/YYYY)": "06/15/2026",
+  "Approximate minutes after the hour. There should be three entries per hour. If no bird is in the chimney at 00, 20, or 40 then scan ahead, minute-by-minute to the next time when a bird is present.": "06:00",
+  "How many adult Swifts are inside the chimney? Give your best guess.": 2,
+  "Stage in the Nesting Cycle": "No nest",
+  "Do any of the adults have something in their bill, or are using their bill?": "N/A or No",
+  "Did you observe any flight(s) going in or out of the chimney during the 1-minute video segment you watched? Did you observe any flights of Swifts inside the chimney, such as when they are changing position inside?": ["Yes, at least one adult flew into the chimney"],
+  "How many adults are within two body-lengths of the nest? Examples include sitting on nest, perched next to it, perched underneath it, or perched above it. If a group of Swifts are perched next to one another, include all of them in your count.": 1,
+  "Are there any adults awake with eyes open?": "Yes",
+  "Note any interesting behaviors not already included on this form. Include social interactions that could be characterized as courtship or aggressive. Do not try to interpret the behaviors; just state what you observed.": "1 north, 1 west"
 }
 ```
 
