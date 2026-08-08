@@ -28,10 +28,10 @@ def sample_csv_rows() -> List[Dict[str, str]]:
     """A tiny hand-curated observation CSV (no header) as a list of row dicts."""
     return [
         {
+            "tower": "3",
             "date_str": "6/15/2026",
             "hour": "6",
             "minutes_past_hour": "0",
-            "tower": "Tower 3",
             "num_adults": "2",
             "nesting_stage": "No nest",
             "bill_use": "N/A or No",
@@ -43,15 +43,15 @@ def sample_csv_rows() -> List[Dict[str, str]]:
     ]
 
 
-# ── App‑script payloads ────────────────────────────────────────────────────────
+# ── App-script payloads ────────────────────────────────────────────────────────
 
 @pytest.fixture
 def apps_script_payload() -> Dict:
     """What form_submit expects to POST to the Apps Script webhook."""
     return {
+        "tower_id": "Tower 3",
         "date": "6/15/2026",
         "time_of_day": "6:00",
-        "tower_id": "Tower 3",
         "adult_swallows_in_chimney": 2,
         "nesting_stage": "No nest",
         "bill_use": "N/A or No",

@@ -25,10 +25,10 @@ from darkwing.schema import (  # noqa: E402
 @pytest.fixture
 def valid_row_dict() -> dict:
     return {
+        "tower": "3",
         "date_str": "6/15/2026",
         "hour": "6",
         "minutes_past_hour": "0",
-        "tower": "Tower 3",
         "num_adults": "2",
         "nesting_stage": "no",
         "bill_use": "na",
@@ -48,9 +48,9 @@ def valid_record(valid_row_dict) -> ObservationRecord:
 def apps_script_payload() -> dict:
     """What form_submit expects to POST to the Apps Script webhook."""
     return {
+        "tower_id": "Tower 3",
         "date": "06/15/2026",
         "time_of_day": "06:00",
-        "tower_id": "Tower 3",
         "adult_swallows_in_chimney": 2,
         "nesting_stage": "No nest",
         "bill_use": "N/A or No",
@@ -66,7 +66,7 @@ def apps_script_payload() -> dict:
 def test_minimal_valid_record_parses(valid_record: ObservationRecord):
     assert valid_record.hour == 6
     assert valid_record.date_str == "06/15/2026"
-    assert valid_record.tower == "Tower 3"
+    assert valid_record.tower == 3
 
 
 # ── 2. date_str format ────────────────────────────────────────────────────────
@@ -76,9 +76,9 @@ def test_date_str_single_digit_month_day(valid_row_dict, valid_record):
 
 def test_date_str_double_digit_month_day():
     r = ObservationRecord.model_validate({
-        "date_str": "12/05/2026",
+        "tower": "1", "date_str": "12/05/2026",
         "hour": "18", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -88,9 +88,9 @@ def test_date_str_double_digit_month_day():
 def test_date_str_bad_format_rejected():
     with pytest.raises(ValueError, match="date_str"):
         ObservationRecord.model_validate({
-            "date_str": "2026-06-15",
+            "tower": "1", "date_str": "2026-06-15",
             "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -99,9 +99,9 @@ def test_date_str_bad_format_rejected():
 def test_date_str_invalid_month_rejected():
     with pytest.raises(ValueError, match="date_str"):
         ObservationRecord.model_validate({
-            "date_str": "13/01/2026",
+            "tower": "1", "date_str": "13/01/2026",
             "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -112,9 +112,9 @@ def test_date_str_invalid_month_rejected():
 
 def test_hour_zero_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026",
+        "tower": "1", "date_str": "6/15/2026",
         "hour": "0", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -123,9 +123,9 @@ def test_hour_zero_allowed():
 
 def test_hour_twentythree_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026",
+        "tower": "1", "date_str": "6/15/2026",
         "hour": "23", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -135,9 +135,9 @@ def test_hour_twentythree_allowed():
 def test_hour_out_of_range_rejected():
     with pytest.raises(ValueError, match="hour"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026",
+            "tower": "1", "date_str": "6/15/2026",
             "hour": "24", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -148,9 +148,9 @@ def test_hour_out_of_range_rejected():
 
 def test_minutes_zero_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026",
+        "tower": "1", "date_str": "6/15/2026",
         "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -159,9 +159,9 @@ def test_minutes_zero_allowed():
 
 def test_minutes_fiftynine_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026",
+        "tower": "1", "date_str": "6/15/2026",
         "hour": "6", "minutes_past_hour": "59",
-        "tower": "Tower 1", "num_adults": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -171,9 +171,9 @@ def test_minutes_fiftynine_allowed():
 def test_minutes_out_of_range_rejected():
     with pytest.raises(ValueError, match="minutes_past_hour"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026",
+            "tower": "1", "date_str": "6/15/2026",
             "hour": "6", "minutes_past_hour": "60",
-            "tower": "Tower 1", "num_adults": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -185,9 +185,8 @@ def test_minutes_out_of_range_rejected():
 def test_tower_empty_rejected():
     with pytest.raises(ValueError, match="tower"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026",
+            "tower": "", "date_str": "6/15/2026",
             "hour": "6", "minutes_past_hour": "0",
-            "tower": "",
             "num_adults": "0", "nesting_stage": "no",
             "bill_use": "na", "flights": "[]",
             "num_near_nest": "0", "awake": "y", "notes": None,
@@ -196,14 +195,22 @@ def test_tower_empty_rejected():
 def test_tower_whitespace_only_rejected():
     with pytest.raises(ValueError, match="tower"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026",
+            "tower": "  ", "date_str": "6/15/2026",
             "hour": "6", "minutes_past_hour": "0",
-            "tower": "   ",
             "num_adults": "0", "nesting_stage": "no",
             "bill_use": "na", "flights": "[]",
             "num_near_nest": "0", "awake": "y", "notes": None,
         })
 
+def test_tower_string_rejected():
+    with pytest.raises(ValueError, match="tower"):
+        ObservationRecord.model_validate({
+            "tower": "Tower 1", "date_str": "6/15/2026",
+            "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0", "nesting_stage": "no",
+            "bill_use": "na", "flights": "[]",
+            "num_near_nest": "0", "awake": "y", "notes": None,
+        })
 
 # ── 6. nesting_stage codes ────────────────────────────────────────────────────
 
@@ -216,8 +223,8 @@ def test_tower_whitespace_only_rejected():
 ])
 def test_nesting_stage_valid(code: str, expected: str):
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": code, "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -229,8 +236,8 @@ def test_nesting_stage_valid(code: str, expected: str):
 def test_nesting_stage_invalid_rejected():
     with pytest.raises(ValueError, match="nesting_stage"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0",
             "nesting_stage": "unknown", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -251,8 +258,8 @@ def test_nesting_stage_invalid_rejected():
 ])
 def test_bill_use_valid(code: str, expected: str):
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": code,
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -263,8 +270,8 @@ def test_bill_use_valid(code: str, expected: str):
 def test_bill_use_invalid_rejected():
     with pytest.raises(ValueError, match="bill_use"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "invalid_code",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -281,8 +288,8 @@ def test_bill_use_invalid_rejected():
 ])
 def test_flights_single_code(code: str, expected: str):
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": json.dumps([code]),
         "num_near_nest": "0", "awake": "y", "notes": None,
@@ -292,8 +299,8 @@ def test_flights_single_code(code: str, expected: str):
 
 def test_flights_empty_list():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -302,8 +309,8 @@ def test_flights_empty_list():
 
 def test_flights_multiple_codes():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": '["in","out"]',
         "num_near_nest": "0", "awake": "y", "notes": None,
@@ -312,8 +319,8 @@ def test_flights_multiple_codes():
 
 def test_flights_three_codes():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": '["in","out","chg"]',
         "num_near_nest": "0", "awake": "y", "notes": None,
@@ -323,8 +330,8 @@ def test_flights_three_codes():
 def test_flights_four_codes_rejected():
     with pytest.raises(ValueError, match="flights"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": '["in","out","chg","non"]',
             "num_near_nest": "0", "awake": "y", "notes": None,
@@ -333,8 +340,8 @@ def test_flights_four_codes_rejected():
 def test_flights_invalid_code_rejected():
     with pytest.raises(ValueError, match="flights"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": '["bad_code"]',
             "num_near_nest": "0", "awake": "y", "notes": None,
@@ -345,8 +352,8 @@ def test_flights_invalid_code_rejected():
 
 def test_num_near_nest_zero_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -356,8 +363,8 @@ def test_num_near_nest_zero_allowed():
 def test_num_near_nest_negative_rejected():
     with pytest.raises(ValueError, match="num_near_nest"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "-1",
             "awake": "y", "notes": None,
@@ -374,8 +381,8 @@ def test_num_near_nest_negative_rejected():
 ])
 def test_awake_valid(code: str, expected: str):
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": code, "notes": None,
@@ -386,8 +393,8 @@ def test_awake_valid(code: str, expected: str):
 def test_awake_invalid_rejected():
     with pytest.raises(ValueError, match="awake"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "0",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "0",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "unknown", "notes": None,
@@ -398,8 +405,8 @@ def test_awake_invalid_rejected():
 
 def test_num_adults_zero_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -409,8 +416,8 @@ def test_num_adults_zero_allowed():
 def test_num_adults_negative_rejected():
     with pytest.raises(ValueError, match="num_adults"):
         ObservationRecord.model_validate({
-            "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-            "tower": "Tower 1", "num_adults": "-1",
+            "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+            "num_adults": "-1",
             "nesting_stage": "no", "bill_use": "na",
             "flights": "[]", "num_near_nest": "0",
             "awake": "y", "notes": None,
@@ -421,8 +428,8 @@ def test_num_adults_negative_rejected():
 
 def test_notes_none_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -431,8 +438,8 @@ def test_notes_none_allowed():
 
 def test_notes_string_allowed():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": "something happened",
@@ -447,8 +454,8 @@ def test_time_of_day(valid_record: ObservationRecord):
 
 def test_time_of_day_nonzero_minutes():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "18", "minutes_past_hour": "30",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "18", "minutes_past_hour": "30",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -460,8 +467,8 @@ def test_time_of_day_nonzero_minutes():
 
 def test_translation_table_keys():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -482,9 +489,9 @@ def test_translation_table_keys():
 def test_to_form_payload_expands_all_codes(valid_record: ObservationRecord, apps_script_payload: dict):
     payload = valid_record.to_form_payload()
     assert payload["adults_flew_in"] == ["Yes, at least one adult flew into the chimney"]
+    assert payload["tower_id"] == "Tower 3"
     assert payload["date"] == "06/15/2026"
     assert payload["time_of_day"] == "06:00"
-    assert payload["tower_id"] == "Tower 3"
     assert payload["adult_swallows_in_chimney"] == 2
     assert payload["nesting_stage"] == "No nest"
     assert payload["bill_use"] == "N/A or No"
@@ -493,8 +500,8 @@ def test_to_form_payload_expands_all_codes(valid_record: ObservationRecord, apps
 
 def test_to_form_payload_empty_flights():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": "hello",
@@ -505,8 +512,8 @@ def test_to_form_payload_empty_flights():
 
 def test_to_form_payload_notes_none_becomes_empty_string():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "0",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
@@ -516,8 +523,8 @@ def test_to_form_payload_notes_none_becomes_empty_string():
 
 def test_to_form_payload_multi_flight_expansion():
     r = ObservationRecord.model_validate({
-        "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
-        "tower": "Tower 1", "num_adults": "1",
+        "tower": "1", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0",
+        "num_adults": "1",
         "nesting_stage": "egg", "bill_use": "mat",
         "flights": '["in","out"]',
         "num_near_nest": "2", "awake": "mbe", "notes": None,

@@ -35,9 +35,9 @@ The Python side sends the output of `ObservationRecord.to_form_payload()`:
 
 ```json
 {
+  "tower_id": "Tower 3",
   "date": "06/15/2026",
   "time_of_day": "06:00",
-  "tower_id": "Tower 3",
   "adult_swallows_in_chimney": 2,
   "nesting_stage": "No nest",
   "bill_use": "N/A or No",

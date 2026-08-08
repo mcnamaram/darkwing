@@ -53,7 +53,7 @@ AWAKE_CODES = set(AWAKE_CODE_TO_TEXT.keys())
 # ── ObservationRecord ──────────────────────────────────────────────────────────
 
 class ObservationRecord(BaseModel):
-    """A single chimney‑swift observation row, as stored in the curated CSV.
+    """A single chimney-swift observation row, as stored in the curated CSV.
 
     The model validates the row in isolation.  ``csv_io`` is responsible for
     loading many rows; ``form_submit`` is responsible for translating them
@@ -65,27 +65,19 @@ class ObservationRecord(BaseModel):
     """
 
     # ── core identification ──────────────────────────────────────────────────
+    tower: int = Field(..., ge=1, le=4, description="Tower identifier, e.g. 3")
     date_str: str = Field(..., description="Date in M/D/YYYY or MM/DD/YYYY format")
-    hour: int = Field(..., ge=0, le=23, description="Hour of day (0‑23)")
+    hour: int = Field(..., ge=0, le=23, description="Hour of day (0-23)")
     minutes_past_hour: int = Field(..., ge=0, le=59, description="Minutes past the hour")
-    tower: str = Field(..., description="Tower identifier, e.g. 'Tower 3'")
     num_adults: int = Field(..., ge=0, description="Number of adult swifts seen")
     nesting_stage: str = Field(..., description="Short code for nesting stage (see NESTING_STAGE_CODE_TO_TEXT)")
     bill_use: str = Field(..., description="Short code for bill use (see BILL_USE_CODE_TO_TEXT)")
     flights: List[str] = Field(default_factory=list, min_length=0, max_length=3, description="Short codes for flight activity")
     num_near_nest: int = Field(..., ge=0, description="Number of swifts near the nest")
     awake: str = Field(..., description="Short code for awake status (see AWAKE_CODE_TO_TEXT)")
-    notes: Optional[str] = Field(None, description="Free‑form notes")
+    notes: Optional[str] = Field(None, description="Free-form notes")
 
     # ── validators ───────────────────────────────────────────────────────────
-
-    @field_validator("tower")
-    @classmethod
-    def validate_tower(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("tower must not be empty after stripping whitespace")
-        return v
 
     @field_validator("date_str")
     @classmethod
@@ -129,9 +121,13 @@ class ObservationRecord(BaseModel):
     @field_validator("flights", mode="before")
     @classmethod
     def parse_flights(cls, v):
-        """Accept a JSON string (from CSV) or a native list."""
+        """Accept semicolon-delimited short codes (legacy JSON arrays also supported)."""
         if isinstance(v, str):
-            v = json.loads(v)
+            v = v.strip()
+            if v.startswith("["):
+                v = json.loads(v)
+            else:
+                v = [item.strip() for item in v.split(";") if item.strip()]
         return v
 
     @field_validator("flights")
@@ -175,9 +171,9 @@ class ObservationRecord(BaseModel):
     def to_form_payload(self) -> Dict[str, object]:
         """Translate this record into the shape the Apps Script webhook expects."""
         return {
+            "tower_id": f"Tower {self.tower}",
             "date": self.date_str,
             "time_of_day": self.time_of_day,
-            "tower_id": self.tower,
             "adult_swallows_in_chimney": self.num_adults,
             "nesting_stage": self._expand(self.nesting_stage, NESTING_STAGE_CODE_TO_TEXT),
             "bill_use": self._expand(self.bill_use, BILL_USE_CODE_TO_TEXT),

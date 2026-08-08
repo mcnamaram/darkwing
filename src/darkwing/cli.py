@@ -17,7 +17,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         records = read_csv(Path(args.csv_path))
         print(f"✓ {len(records)} record(s) validated successfully.")
         for r in records:
-            print(f"  - {r.date_str} {r.time_of_day}  {r.tower}  "
+            print(f"  - {r.tower}  {r.date_str} {r.time_of_day}  "
                   f"{r.num_adults} adult(s)  {r.nesting_stage}")
         return 0
     except Exception as exc:

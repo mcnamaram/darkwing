@@ -69,7 +69,7 @@ def test_get_token_nonzero_exit_raises(cache_file: Path):
             get_token()
 
 
-# ── caching: 50‑minute window ─────────────────────────────────────────────────
+# ── caching: 50-minute window ─────────────────────────────────────────────────
 
 def test_cached_token_returned_within_50_minutes(cache_file: Path):
     """Second call within 50 min returns cached token, no subprocess call."""

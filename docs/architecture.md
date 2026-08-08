@@ -9,7 +9,7 @@ DarkWing is a single-process Python package plus a Jupyter notebook entry point.
 | Component | Path | Role |
 | --- | --- | --- |
 | Schema | `src/darkwing/schema.py` | Pydantic models and the short-code → form-text translation table. |
-| CSV I/O | `src/darkwing/csv_io.py` | Reads the curated CSV; parses the `flights` column (a JSON array of short codes); appends to the submission log. |
+|| CSV I/O | `src/darkwing/csv_io.py` | Reads the curated CSV; parses the `flights` column (semicolon-delimited short codes, e.g. `in;out`); appends to the submission log. |
 | Auth | `src/darkwing/auth.py` | Retrieves a Google OAuth bearer token via `gcloud auth print-access-token`. Caches for 50 minutes. |
 | Submit | `src/darkwing/form_submit.py` | Translates a record into form-ready JSON, POSTs it to the Apps Script URL with `Authorization: Bearer <token>`. |
 | CLI | `src/darkwing/cli.py` | `python -m darkwing {submit,validate} path/to/file.csv [--dry-run] [--force]`. |
@@ -23,12 +23,12 @@ The Python code owns the *content* of the submission — the field titles, the t
 ```ascii
 curated CSV
    │  one row per observation (45 rows per day per tower)
-   │  columns: date_str, hour, minutes_past_hour, tower,
+   │  columns: tower, date_str, hour, minutes_past_hour,
    │           num_adults, nesting_stage, bill_use, flights,
    │           num_near_nest, awake, notes
    ▼
 csv_io.read_rows(path)
-   │  parses flights (JSON array) into a list of short codes
+   │  parses flights (semicolon-delimited, e.g. `in;out`) into a list of short codes
    ▼
 schema.ObservationRecord.model_validate(row)
    │  Pydantic v2; raises on violation
@@ -68,8 +68,8 @@ The CSV has eleven columns. Five are short-code columns with fixed-value transla
 
 | Column | Type | Notes |
 | --- | --- | --- |
+| `tower` | number | e.g. `3` would translate to `Tower 3`. Defaults from `DARKWING_DEFAULT_TOWER` if empty. |
 | `date_str` | string | `M/D/YYYY`. Year in `[2024, 2030]`. |
-| `tower` | string | e.g. `Tower 3`. Defaults from `DARKWING_DEFAULT_TOWER` if empty. |
 | `notes` | string | Free text. May be empty. |
 
 ### Short-code columns
@@ -108,7 +108,7 @@ Codes are unique by *what they describe*, scoped by the column they appear in. A
 | `chg` | `Yes, at least one adult changed position within the chimney but did not enter or exit` |
 | `non` | `None of the above` |
 
-The CSV stores this column as a JSON array string, e.g. `["in","chg"]`.
+The CSV stores this column as semicolon-delimited short codes, e.g. `in;chg`.
 
 **`awake`** (one of):
 

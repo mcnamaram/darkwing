@@ -15,12 +15,12 @@ You have followed [Setup](./setup.md) and have:
 Create a file at `~/Desktop/test_observations.csv` with these contents:
 
 ```csv
-date_str,hour,minutes_past_hour,tower,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
-6/15/2026,6,0,Tower 3,2,No nest,N/A or No,"[Yes, at least one adult flew into the chimney,Yes, at least one adult changed position within the chimney but did not enter or exit]",1,Yes,Test row 1
-6/15/2026,6,20,Tower 3,0,No nest,N/A or No,[None of the above],0,No adults present,No swifts in this window
+tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
+3,6/15/2026,6,0,2,no,na,in;chg,1,y,"Test row 1"
+3,6/15/2026,6,20,0,no,na,non,0,nap,
 ```
 
-The column names are exactly what `to_form_payload()` expects. `flights` is a JSON-encoded list; `num_adults` is an integer; `awake` accepts the four enum values exactly as the form spells them.
+The column names are exactly what `to_form_payload()` expects. `flights` is a semicolon-delimited list of short codes (e.g. `in` or `in;out`); `num_adults` is an integer; `awake` accepts the four enum values exactly as the form spells them.
 
 ## 2. Validate the CSV
 
@@ -46,7 +46,7 @@ Expected output: a table of the two rows that *would* be submitted, with their t
 
 Expected output:
 
-```
+```sh
 [1/2] submitting uuid=… timestamp_utc=2026-06-15T10:00:00Z → 200
 [2/2] submitting uuid=… timestamp_utc=2026-06-15T10:20:00Z → 200
 done: 2 submitted, 0 skipped, 0 errors

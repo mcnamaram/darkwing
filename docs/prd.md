@@ -29,7 +29,7 @@ A small Python package reads a curated CSV (one row per observation) and submits
 One row per observation. An "observation" is one of three checkpoints in an hour, 6:00 AM to 9:00 PM, 45 rows per day per tower. For each row the system captures:
 
 - **When**: the date and the hour, plus which of the three checkpoints (00, 20, or 40 minutes past the hour).
-- **Where**: the tower number (e.g. `Tower 3`).
+- **Where**: the tower number (e.g. `3`).
 - **What was seen**: the count of adult swifts inside the chimney, the stage in the nesting cycle, what the swifts were doing with their bills, what flight activity was observed, how many adults were near the nest, and whether any adults were awake.
 - **Free-form notes**: anything the researcher noticed that the form's questions don't already cover.
 

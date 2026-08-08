@@ -53,3 +53,4 @@ __pycache__/
 *token*
 *cookie*
 !secrets_handling.md
+obs.csv

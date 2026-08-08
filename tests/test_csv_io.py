@@ -44,7 +44,7 @@ def test_read_csv_parses_all_rows(valid_records: list):
 
 def test_read_csv_first_row(valid_records: list):
     r = valid_records[0]
-    assert r.tower == "Tower 3"
+    assert r.tower == 3
     assert r.num_adults == 2
     assert r.flights == ["in"]
     assert r.date_str == "06/15/2026"
@@ -53,7 +53,7 @@ def test_read_csv_first_row(valid_records: list):
 
 def test_read_csv_last_row(valid_records):
     r = valid_records[-1]
-    assert r.tower == "Tower 2"
+    assert r.tower == 2
     assert r.hour == 18
     assert r.minutes_past_hour == 30
     assert r.time_of_day == "18:30"
@@ -85,9 +85,9 @@ def test_read_csv_invalid_date():
     """Row with bad date format raises ValueError."""
     bad_csv = FIXTURES_ROOT / "bad_date.csv"
     bad_csv.write_text(
-        "date_str,hour,minutes_past_hour,tower,num_adults,"
+        "tower,date_str,hour,minutes_past_hour,num_adults,"
         "nesting_stage,bill_use,flights,num_near_nest,awake,notes\n"
-        "2026-06-15,6,0,Tower 1,0,No nest,N/A or No,[],0,Yes,\n",
+        "1,2026-06-15,6,0,0,No nest,N/A or No,[],0,Yes,\n",
         encoding="utf-8",
     )
     try:
@@ -100,9 +100,9 @@ def test_read_csv_invalid_date():
 def test_read_csv_invalid_nesting_stage():
     bad_csv = FIXTURES_ROOT / "bad_stage.csv"
     bad_csv.write_text(
-        "date_str,hour,minutes_past_hour,tower,num_adults,"
+        "tower,date_str,hour,minutes_past_hour,num_adults,"
         "nesting_stage,bill_use,flights,num_near_nest,awake,notes\n"
-        "6/15/2026,6,0,Tower 1,0,Invalid stage,N/A or No,[],0,Yes,\n",
+        "1,6/15/2026,6,0,0,Invalid stage,N/A or No,[],0,Yes,\n",
         encoding="utf-8",
     )
     try:
@@ -123,8 +123,8 @@ def test_write_and_read_submission_log(tmp_path: Path, valid_records: list):
     # each line is valid JSON
     for line in lines:
         obj = json.loads(line)
-        assert "date_str" in obj
         assert "tower" in obj
+        assert "date_str" in obj
 
 
 def test_get_submission_log_empty(tmp_path: Path):

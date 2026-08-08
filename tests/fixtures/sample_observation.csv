@@ -1,5 +1,5 @@
-date_str,hour,minutes_past_hour,tower,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
-6/15/2026,6,0,Tower 3,2,no,na,"[""in""]",1,y,"1 north, 1 west. west moved to north"
-6/15/2026,7,0,Tower 3,3,no,mat,"[""in"",""out""]",2,y,
-6/15/2026,8,0,Tower 1,0,no,na,"[]",0,y,
-6/15/2026,18,30,Tower 2,1,egg,na,"[""non""]",0,n,
+tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
+3,6/15/2026,6,0,2,no,na,in,1,y,1 north, 1 west. west moved to north
+3,6/15/2026,7,0,3,no,mat,in;out,2,y,
+1,6/15/2026,8,0,0,no,na,,0,y,
+2,6/15/2026,18,30,1,egg,na,non,0,n,

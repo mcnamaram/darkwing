@@ -67,7 +67,7 @@ DARKWING_APPS_SCRIPT_URL=https://script.google.com/macros/s/<your-deployment-id>
 DARKWING_FORM_ID=<your-form-id>
 DARKWING_SUBMITTER_EMAIL=you@example.org
 DARKWING_SUBMITTER_NAME="Your Name"
-DARKWING_DEFAULT_TOWER=Tower 3
+DARKWING_DEFAULT_TOWER=3
 EOF
 chmod 600 .env
 ```
@@ -80,7 +80,7 @@ The `.env` file is gitignored. **Do not commit it.** See [Secrets Handling](./se
 | `DARKWING_FORM_ID` | yes | The form ID (the long string in the form's URL). |
 | `DARKWING_SUBMITTER_EMAIL` | yes | The email the form will record for each submission. |
 | `DARKWING_SUBMITTER_NAME` | yes | The name the form will record for each submission. |
-| `DARKWING_DEFAULT_TOWER` | no | The tower number to default to if a row's `tower` field is empty. Defaults to `Tower 3`. |
+| `DARKWING_DEFAULT_TOWER` | no | The tower number to default to if a row's `tower` field is empty. Defaults to `3`. |
 
 ## 4. Run the test suite
 

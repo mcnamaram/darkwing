@@ -1,4 +1,4 @@
-"""gcloud OAuth token retrieval with 50‑minute cache."""
+"""gcloud OAuth token retrieval with 50-minute cache."""
 from __future__ import annotations
 
 import subprocess

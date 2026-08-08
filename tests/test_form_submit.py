@@ -23,10 +23,10 @@ from darkwing.schema import ObservationRecord  # noqa: E402
 @pytest.fixture
 def sample_record() -> ObservationRecord:
     return ObservationRecord.model_validate({
+        "tower": "3",
         "date_str": "6/15/2026",
         "hour": "6",
         "minutes_past_hour": "0",
-        "tower": "Tower 3",
         "num_adults": "2",
         "nesting_stage": "no",
         "bill_use": "na",
@@ -97,7 +97,7 @@ def test_submit_csv_records_dry_run(sample_record, mock_env):
     mock_submit.assert_not_called()
     assert len(results) == 1
     assert results[0]["status"] == "dry-run"
-    assert results[0]["tower"] == "Tower 3"
+    assert results[0]["tower"] == 3
 
 
 def test_submit_csv_records_real(sample_record, mock_env):
