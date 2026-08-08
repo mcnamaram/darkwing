@@ -157,16 +157,16 @@ def test_minutes_zero_allowed():
     })
     assert r.minutes_past_hour == 0
 
-def test_minutes_fiftynine_allowed():
-    r = ObservationRecord.model_validate({
-        "tower": "1", "date_str": "6/15/2026",
-        "hour": "6", "minutes_past_hour": "59",
-        "num_adults": "0",
-        "nesting_stage": "no", "bill_use": "na",
-        "flights": "[]", "num_near_nest": "0",
-        "awake": "y", "notes": None,
-    })
-    assert r.minutes_past_hour == 59
+def test_minutes_fiftynine_rejected():
+    with pytest.raises(ValueError, match="minutes_past_hour"):
+        ObservationRecord.model_validate({
+            "tower": "1", "date_str": "6/15/2026",
+            "hour": "6", "minutes_past_hour": "59",
+            "num_adults": "0",
+            "nesting_stage": "no", "bill_use": "na",
+            "flights": "[]", "num_near_nest": "0",
+            "awake": "y", "notes": None,
+        })
 
 def test_minutes_out_of_range_rejected():
     with pytest.raises(ValueError, match="minutes_past_hour"):
@@ -454,13 +454,13 @@ def test_time_of_day(valid_record: ObservationRecord):
 
 def test_time_of_day_nonzero_minutes():
     r = ObservationRecord.model_validate({
-        "tower": "1", "date_str": "6/15/2026", "hour": "18", "minutes_past_hour": "30",
+        "tower": "1", "date_str": "6/15/2026", "hour": "18", "minutes_past_hour": "20",
         "num_adults": "0",
         "nesting_stage": "no", "bill_use": "na",
         "flights": "[]", "num_near_nest": "0",
         "awake": "y", "notes": None,
     })
-    assert r.time_of_day == "18:30"
+    assert r.time_of_day == "18:20"
 
 
 # ── 14. translation_table ─────────────────────────────────────────────────────

@@ -55,8 +55,8 @@ def test_read_csv_last_row(valid_records):
     r = valid_records[-1]
     assert r.tower == 2
     assert r.hour == 18
-    assert r.minutes_past_hour == 30
-    assert r.time_of_day == "18:30"
+    assert r.minutes_past_hour == 20
+    assert r.time_of_day == "18:20"
     assert r.awake == "n"
 
 

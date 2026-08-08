@@ -68,7 +68,7 @@ class ObservationRecord(BaseModel):
     tower: int = Field(..., ge=1, le=4, description="Tower identifier, e.g. 3")
     date_str: str = Field(..., description="Date in M/D/YYYY or MM/DD/YYYY format")
     hour: int = Field(..., ge=0, le=23, description="Hour of day (0-23)")
-    minutes_past_hour: int = Field(..., ge=0, le=59, description="Minutes past the hour")
+    minutes_past_hour: int = Field(..., description="Minutes past the hour — must be 0, 20, or 40")
     num_adults: int = Field(..., ge=0, description="Number of adult swifts seen")
     nesting_stage: str = Field(..., description="Short code for nesting stage (see NESTING_STAGE_CODE_TO_TEXT)")
     bill_use: str = Field(..., description="Short code for bill use (see BILL_USE_CODE_TO_TEXT)")
@@ -141,11 +141,12 @@ class ObservationRecord(BaseModel):
             )
         return v
 
-    @model_validator(mode="after")
-    def check_minutes_nonnegative(self) -> "ObservationRecord":
-        if self.minutes_past_hour < 0:
-            raise ValueError("minutes_past_hour must be >= 0")
-        return self
+    @field_validator("minutes_past_hour")
+    @classmethod
+    def validate_minutes_past_hour(cls, v: int) -> int:
+        if v not in (0, 20, 40):
+            raise ValueError("minutes_past_hour must be 0, 20, or 40")
+        return v
 
     # ── computed helpers ─────────────────────────────────────────────────────
 
