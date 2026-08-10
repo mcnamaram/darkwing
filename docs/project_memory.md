@@ -19,7 +19,7 @@
 | 3 | Auth | ✅ done | `src/darkwing/auth.py` — gcloud token retrieval with 50-min cache |
 | 4 | Form submit | ✅ done | `src/darkwing/form_submit.py` — POST to Apps Script webhook |
 | 5 | CLI + notebook | ✅ done (CLI) | `src/darkwing/cli.py` — `darkwing validate/submit`. Notebook not yet created. |
-| 6 | Apps Script | ✅ done | `apps_script/doPost.gs` — reference handler for all form item types |
+| 6 | Apps Script | ✅ done | `apps_script/Code.js` — reference handler for all form item types |
 | 7 | Manual smoke | 🟠 blocked | One real run against the live form (needs user to deploy Apps Script) |
 
 **Legend:** ⬜ not started · ✅ done · 🟡 in progress · 🟠 blocked
@@ -61,7 +61,7 @@ tests/
     sample_observation.csv  4-row sample (realistic data)
 
 apps_script/
-  doPost.gs      Reference Apps Script handler (all item types)
+  Code.js      Reference Apps Script handler (all item types)
   README.md      Deployment instructions
 ```
 
@@ -71,7 +71,7 @@ apps_script/
 
 ### Immediate — Phase 7: manual smoke test
 
-Deploy `apps_script/doPost.gs` to your Google Apps Script editor, set `FORM_ID` in script properties, and run:
+Deploy `apps_script/Code.js` to your Google Apps Script editor, set `FORM_ID` in script properties, and run:
 
 ```bash
 .venv/bin/python -m darkwing.cli submit tests/fixtures/sample_observation.csv --dry-run

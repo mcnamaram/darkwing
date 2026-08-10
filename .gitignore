@@ -55,3 +55,4 @@ __pycache__/
 !secrets_handling.md
 obs.csvnode_modules/
 .hermes/cache/
+.clasp.json

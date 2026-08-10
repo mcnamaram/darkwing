@@ -4,62 +4,89 @@ This directory contains the reference implementation of the Google Apps Script
 `doPost` handler that the DarkWing Python package calls to submit observations
 to a Google Form.
 
-## Deployment
+## What this does
 
-1. Open [script.google.com](https://script.google.com/) and create a new project.
-2. Paste the contents of `doPost.gs` into the editor.
-3. Set the `FORM_ID` script property:
-   - **File → Project settings → Script properties**
-   - Add `FORM_ID` = the form's ID (the long string in the form URL)
-4. Click **Deploy → New deployment** → select **Web app**:
-   - Execute as: **Me** (your Google account)
-   - Who has access: **Anyone with Google account** (or stricter, as needed)
-5. Copy the `/exec` URL and add it to your `.env`:
+When DarkWing submits an observation, it POSTs a JSON payload to this script's
+webhook URL. The script reads the JSON, matches each field to the correct
+Google Form question, and submits the response on your behalf.
 
-   ```env
-   DARKWING_APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
+**Read the full API contract:** [DarkWing API Reference](../docs/api_reference.md)
+
+---
+
+## Quick Start (One-Time Setup)
+
+### 1. Create the Apps Script Project
+
+1. Go to [script.google.com](https://script.google.com/)
+2. Click **New project** (top left)
+3. Replace any default `Code` with the contents of `doPost.gs`
+4. **File → Project settings** → Scroll to **Script Properties**
+5. Add a new property:
+   - **Name:** `FORM_ID`
+   - **Value:** The form ID from your Google Form URL
+
+   Your form URL looks like:
+   ```
+   https://docs.google.com/forms/d/e/YOUR_FORM_ID_HERE/viewform
    ```
 
-## Deployment via CI/CD
+6. Click **Save**
 
-This project includes a GitHub Actions workflow (`.github/workflows/deploy-apps-script.yml`) that automatically deploys the Apps Script when `doPost.gs` changes.
+### 2. Deploy as Web App
 
-### Required GitHub Secrets
+1. **Deploy → New deployment**
+2. Click the gear icon → **Web app**
+3. Configure:
+   - **Description:** `DarkWing webhook`
+   - **Execute as:** `Me` (your Google account)
+   - **Who has access:** `Anyone with Google account`
+4. Click **Deploy**
+5. **Authorize access** when prompted (this is normal — the script needs permission to submit forms on your behalf)
+6. Copy the **Web app URL** — it looks like:
+   ```
+   https://script.google.com/macros/s/AKfycbx.../exec
+   ```
 
-| Secret | Description | How to get |
-|--------|-------------|------------|
-| `CLASP_ACCESS_TOKEN` | OAuth access token | Run `clasp login` locally, then cat `~/.clasprc.json` |
-| `CLASP_REFRESH_TOKEN` | OAuth refresh token | Same as above |
-| `CLASP_CLIENT_ID` | OAuth client ID | From Google Cloud Console |
-| `CLASP_CLIENT_SECRET` | OAuth client secret | From Google Cloud Console |
+### 3. Connect to DarkWing
 
-### Setup
+Add the webhook URL to your DarkWing project's `.env` file:
 
-1. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → OAuth client ID
-2. Enable the Apps Script API and Drive API
-3. Run `clasp login` locally to get tokens
-4. Add the secrets to your GitHub repository settings
+```env
+DARKWING_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbx.../exec
+```
 
-### Trigger
+You're done! Run `darkwing submit observations.csv` to test.
 
-The workflow runs on push to `main` when these paths change:
-- `apps_script/doPost.gs`
-- `apps_script/appscript.json`
-- `.github/workflows/deploy-apps-script.yml`
+---
 
-## What the script does
+## CI/CD Deployment (Optional)
 
-- Receives a flat JSON object from the Python package with clean keys.
-- Uses `TITLE_MAP` (defined at the top of the script) to translate clean keys to Google Form item titles.
-- Matches each value to the correct form item by title.
-- Handles all common form item types: `TEXT`, `PARAGRAPH_TEXT`, `MULTIPLE_CHOICE`,
-  `CHECKBOX`, `LIST`, `DATE`, `TIME`, `DATE_TIME`.
-- Submits the response using the deployer's authenticated session.
-- Returns `{"status": "success", "response": {...}}` or `{"status": "error", "message": "..."}`.
+This project includes a GitHub Actions workflow that automatically deploys updates
+when `doPost.gs` changes. See the [GitHub Actions guide](#github-actions-cicd) below.
 
-## Payload shape
+---
 
-The Python side sends the output of `ObservationRecord.to_form_payload()` — clean keys, short-form values already expanded:
+## How the Script Works
+
+### Title Mapping
+
+The `TITLE_MAP` object at the top of `doPost.gs` maps clean payload keys to
+actual Google Form question titles. If you rename a form question, just update
+the mapping — no Python changes needed.
+
+**Example:**
+```javascript
+var TITLE_MAP = {
+  "tower_id": "Tower Number",
+  "date": "Date of footage being analyzed (please input date in this format M/D/YYYY)",
+  "time_of_day": "Approximate minutes after the hour..."
+};
+```
+
+### Payload Format
+
+The Python side sends JSON like this:
 
 ```json
 {
@@ -76,18 +103,148 @@ The Python side sends the output of `ObservationRecord.to_form_payload()` — cl
 }
 ```
 
-## Title mapping
+Short codes are expanded before sending (e.g., `"no"` → `"No nest"`).
 
-The `TITLE_MAP` object at the top of `doPost.gs` maps clean keys to the actual Google Form item titles. If a form question is renamed, only update `TITLE_MAP` — the Python side does not need to change.
+### Supported Form Field Types
 
-The script matches these keys to form item titles. If a form item title doesn't
-match any key, it's skipped (no error). If a value doesn't match any choice for
-a multiple-choice/checkbox/list item, the submission fails with a clear error.
+| Apps Script Type | Python Value | Example |
+|------------------|--------------|---------|
+| `TEXT` / `PARAGRAPH_TEXT` | string | `"No nest"` |
+| `MULTIPLE_CHOICE` | string | `"Yes"` |
+| `LIST` | string | `"Maybe"` |
+| `CHECKBOX` | array of strings | `["in", "out"]` |
+| `DATE` | string `M/D/YYYY` | `"06/15/2026"` |
+| `TIME` | string `HH:MM` | `"06:00"` |
+| `DATE_TIME` | string | Handled automatically |
 
-## Security
+---
 
-- The script runs as the deployer, so the form submission is authenticated.
-- The Python side sends a `Bearer` token in the `Authorization` header, but the
-  script does **not** validate it — that's the Python side's job.
-- The script is a thin pass-through. All business logic (validation, translation)
-  lives in the Python package.
+## GitHub Actions CI/CD
+
+### Overview
+
+The workflow (`.github/workflows/deploy-apps-script.yml`) automatically deploys
+the script when `doPost.gs` changes. It uses [clasp](https://github.com/google/clasp),
+the official Google Apps Script CLI.
+
+**Official docs:**
+- [clasp CLI Guide](https://developers.google.com/apps-script/guides/clasp)
+- [clasp GitHub Repo](https://github.com/google/clasp)
+
+### Prerequisites
+
+1. **Node.js 16+** — clasp requires Node.js
+2. **Google Cloud Project** with Apps Script API enabled
+3. **OAuth Credentials** for the script to deploy on your behalf
+
+### Setup Steps
+
+#### Step 1: Create Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or use an existing one)
+3. Enable these APIs:
+   - **Apps Script API:** [APIs & Services → Library → Google Apps Script API](https://console.cloud.google.com/apis/library/script.googleapis.com)
+   - **Drive API:** [APIs & Services → Library → Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+
+#### Step 2: Create OAuth Credentials
+
+1. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+2. Application type: **Desktop app**
+3. Name: `DarkWing clasp`
+4. Click **Create**
+5. Download the JSON file — you'll need `client_id` and `client_secret`
+
+#### Step 3: Install and Login with clasp
+
+```bash
+# Install clasp globally
+npm install -g @google/clasp
+
+# Login (opens browser for OAuth)
+clasp login
+
+# Link to your Apps Script project
+clasp clone YOUR_SCRIPT_ID
+# OR create new:
+clasp create --title "DarkWing Webhook"
+```
+
+#### Step 4: Get Clasp Tokens
+
+After `clasp login`, your credentials are stored in `~/.clasprc.json`:
+
+```bash
+cat ~/.clasprc.json
+```
+
+Copy the `access_token` and `refresh_token` values.
+
+#### Step 5: Add GitHub Secrets
+
+In your GitHub repository, go to **Settings → Secrets and variables → Actions** and add:
+
+| Secret Name | Value |
+|-------------|-------|
+| `CLASP_CREDENTIALS` | Full JSON from `~/.clasprc.json` |
+| `CLASP_CLIENT_ID` | From your OAuth credentials JSON |
+| `CLASP_CLIENT_SECRET` | From your OAuth credentials JSON |
+
+#### Step 6: Trigger Deployment
+
+Push changes to `main`:
+
+```bash
+git add apps_script/doPost.gs
+git commit -m "fix: update form mapping"
+git push origin main
+```
+
+The workflow runs automatically when these files change:
+- `apps_script/doPost.gs`
+- `apps_script/appscript.json`
+- `.github/workflows/deploy-apps-script.yml`
+
+### Troubleshooting
+
+**"clasp login fails"**
+- Make sure you've enabled the Apps Script API in Google Cloud Console
+- Check that your OAuth consent screen is configured (for testing, set **Test app**)
+
+**"Deploy fails with 403"**
+- The script needs the `https://www.googleapis.com/auth/script.deployments` scope
+- Re-authorize clasp: `clasp logout && clasp login`
+
+**"Token expired"**
+- Refresh tokens last indefinitely; access tokens expire every hour
+- The workflow handles refresh automatically
+
+---
+
+## Debugging
+
+### Enable Logging
+
+The script logs to [Stackdriver Logging](https://console.cloud.google.com/logging).
+
+1. Open your Apps Script project
+2. **View → Stackdriver Logging**
+3. Filter by `doPost` to see submission attempts
+
+### Test Manually
+
+```bash
+# Test the webhook directly
+curl -X POST "https://script.google.com/macros/s/YOUR_ID/exec" \
+  -H "Content-Type: application/json" \
+  -d '{"tower_id":"Tower 1","date":"6/15/2026","time_of_day":"06:00","adult_swallows_in_chimney":1,"nesting_stage":"No nest","bill_use":"N/A or No","adults_flew_in":[],"swallows_near_nest":0,"awake":"Yes","notes":"test"}'
+```
+
+---
+
+## References
+
+- [Google Apps Script Documentation](https://developers.google.com/apps-script)
+- [clasp CLI Documentation](https://developers.google.com/apps-script/guides/clasp)
+- [FormApp API Reference](https://developers.google.com/apps-script/reference/forms)
+- [Apps Script REST API](https://developers.google.com/apps-script/api/reference/rest)
