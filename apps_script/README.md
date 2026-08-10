@@ -20,7 +20,7 @@ Google Form question, and submits the response on your behalf.
 
 1. Go to [script.google.com](https://script.google.com/)
 2. Click **New project** (top left)
-3. Replace any default `Code` with the contents of `doPost.gs`
+3. Replace the default `Code.js` with the contents of `doPost.gs`
 4. **File → Project settings** → Scroll to **Script Properties**
 5. Add a new property:
    - **Name:** `FORM_ID`

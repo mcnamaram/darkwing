@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps_script/Code.js'
-      - 'apps_script/appsscript.json'
+      - 'apps_script/doPost.gs'
+      - 'apps_script/appscript.json'
       - '.github/workflows/deploy-apps-script.yml'
 
 # Prevent concurrent deployments
