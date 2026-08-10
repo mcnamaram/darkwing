@@ -20,14 +20,15 @@ Google Form question, and submits the response on your behalf.
 
 1. Go to [script.google.com](https://script.google.com/)
 2. Click **New project** (top left)
-3. Replace the default `Code.js` with the contents of `doPost.gs`
+3. Open the project's script file (default: `Code.js`) and replace its contents with `Code.js` from this directory
 4. **File → Project settings** → Scroll to **Script Properties**
 5. Add a new property:
    - **Name:** `FORM_ID`
    - **Value:** The form ID from your Google Form URL
 
    Your form URL looks like:
-   ```
+
+   ```url
    https://docs.google.com/forms/d/e/YOUR_FORM_ID_HERE/viewform
    ```
 
@@ -44,7 +45,8 @@ Google Form question, and submits the response on your behalf.
 4. Click **Deploy**
 5. **Authorize access** when prompted (this is normal — the script needs permission to submit forms on your behalf)
 6. Copy the **Web app URL** — it looks like:
-   ```
+
+   ```url
    https://script.google.com/macros/s/AKfycbx.../exec
    ```
 
@@ -63,7 +65,7 @@ You're done! Run `darkwing submit observations.csv` to test.
 ## CI/CD Deployment (Optional)
 
 This project includes a GitHub Actions workflow that automatically deploys updates
-when `doPost.gs` changes. See the [GitHub Actions guide](#github-actions-cicd) below.
+when `Code.js` changes. See the [GitHub Actions guide](#github-actions-cicd) below.
 
 ---
 
@@ -71,11 +73,12 @@ when `doPost.gs` changes. See the [GitHub Actions guide](#github-actions-cicd) b
 
 ### Title Mapping
 
-The `TITLE_MAP` object at the top of `doPost.gs` maps clean payload keys to
+The `TITLE_MAP` object at the top of `Code.js` maps clean payload keys to
 actual Google Form question titles. If you rename a form question, just update
 the mapping — no Python changes needed.
 
 **Example:**
+
 ```javascript
 var TITLE_MAP = {
   "tower_id": "Tower Number",
@@ -108,7 +111,7 @@ Short codes are expanded before sending (e.g., `"no"` → `"No nest"`).
 ### Supported Form Field Types
 
 | Apps Script Type | Python Value | Example |
-|------------------|--------------|---------|
+| ------------------ | -------------- | --------- |
 | `TEXT` / `PARAGRAPH_TEXT` | string | `"No nest"` |
 | `MULTIPLE_CHOICE` | string | `"Yes"` |
 | `LIST` | string | `"Maybe"` |
@@ -124,16 +127,17 @@ Short codes are expanded before sending (e.g., `"no"` → `"No nest"`).
 ### Overview
 
 The workflow (`.github/workflows/deploy-apps-script.yml`) automatically deploys
-the script when `doPost.gs` changes. It uses [clasp](https://github.com/google/clasp),
+the script when `Code.js` changes. It uses [clasp](https://github.com/google/clasp),
 the official Google Apps Script CLI.
 
 **Official docs:**
+
 - [clasp CLI Guide](https://developers.google.com/apps-script/guides/clasp)
 - [clasp GitHub Repo](https://github.com/google/clasp)
 
 ### Prerequisites
 
-1. **Node.js 16+** — clasp requires Node.js
+1. **Node.js 20+** — clasp requires Node.js
 2. **Google Cloud Project** with Apps Script API enabled
 3. **OAuth Credentials** for the script to deploy on your behalf
 
@@ -141,21 +145,14 @@ the official Google Apps Script CLI.
 
 #### Step 1: Create Google Cloud Project
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or use an existing one)
-3. Enable these APIs:
-   - **Apps Script API:** [APIs & Services → Library → Google Apps Script API](https://console.cloud.google.com/apis/library/script.googleapis.com)
-   - **Drive API:** [APIs & Services → Library → Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+1. Go to [Google App Script](https://script.google.com/home)
+2. Select the DarkWing project (from the Quick Setup above).
+3. Enable the Google Apps Script API (Script API)
+   - Navigate to Settings.
+   - Click on Google Apps Script API.
+   - Toggle it on.
 
-#### Step 2: Create OAuth Credentials
-
-1. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-2. Application type: **Desktop app**
-3. Name: `DarkWing clasp`
-4. Click **Create**
-5. Download the JSON file — you'll need `client_id` and `client_secret`
-
-#### Step 3: Install and Login with clasp
+#### Step 2: Install and Login with clasp
 
 ```bash
 # Install clasp globally
@@ -170,7 +167,7 @@ clasp clone YOUR_SCRIPT_ID
 clasp create --title "DarkWing Webhook"
 ```
 
-#### Step 4: Get Clasp Tokens
+#### Step 3: Get Clasp Tokens
 
 After `clasp login`, your credentials are stored in `~/.clasprc.json`:
 
@@ -178,44 +175,47 @@ After `clasp login`, your credentials are stored in `~/.clasprc.json`:
 cat ~/.clasprc.json
 ```
 
-Copy the `access_token` and `refresh_token` values.
-
-#### Step 5: Add GitHub Secrets
+#### Step 4: Add GitHub Secrets
 
 In your GitHub repository, go to **Settings → Secrets and variables → Actions** and add:
 
 | Secret Name | Value |
-|-------------|-------|
-| `CLASP_CREDENTIALS` | Full JSON from `~/.clasprc.json` |
-| `CLASP_CLIENT_ID` | From your OAuth credentials JSON |
-| `CLASP_CLIENT_SECRET` | From your OAuth credentials JSON |
+| ------------- | ------- |
+| `CLASPRC_JSON` | Full JSON from `~/.clasprc.json` |
+| `CLASP_JSON` | Full JSON from `.clasp.json` |
 
-#### Step 6: Trigger Deployment
+**Ensure .clasp.json (and .clasprc.json) are in the .gitignore. They contain sensitive values.**
+
+#### Step 5: Trigger Deployment
 
 Push changes to `main`:
 
 ```bash
-git add apps_script/doPost.gs
+git add apps_script/Code.js
 git commit -m "fix: update form mapping"
 git push origin main
 ```
 
 The workflow runs automatically when these files change:
-- `apps_script/doPost.gs`
-- `apps_script/appscript.json`
+
+- `apps_script/Code.js`
+- `apps_script/appsscript.json`
 - `.github/workflows/deploy-apps-script.yml`
 
 ### Troubleshooting
 
 **"clasp login fails"**
+
 - Make sure you've enabled the Apps Script API in Google Cloud Console
 - Check that your OAuth consent screen is configured (for testing, set **Test app**)
 
 **"Deploy fails with 403"**
+
 - The script needs the `https://www.googleapis.com/auth/script.deployments` scope
 - Re-authorize clasp: `clasp logout && clasp login`
 
 **"Token expired"**
+
 - Refresh tokens last indefinitely; access tokens expire every hour
 - The workflow handles refresh automatically
 
