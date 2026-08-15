@@ -27,6 +27,7 @@ Pipfile.lock
 # Local configuration & Secrets
 .env
 .env.*
+!.env.example
 .hermes/
 *.local
 .test/
@@ -55,4 +56,5 @@ __pycache__/
 !secrets_handling.md
 obs.csvnode_modules/
 .hermes/cache/
-.clasp.json
+google_profile/
+obs.csv

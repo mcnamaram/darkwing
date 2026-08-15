@@ -37,6 +37,11 @@ BILL_USE_CODE_TO_TEXT: Dict[str, str] = {
     "oth": "Other",
 }
 
+NUM_NEAR_NEST_CODE_TO_TEXT: Dict[str, str] = {
+    "na": "N/A or Zero",
+    "oth": "Other",
+}
+
 AWAKE_CODE_TO_TEXT: Dict[str, str] = {
     "y":   "Yes",
     "n":   "No",
@@ -67,17 +72,57 @@ class ObservationRecord(BaseModel):
     # ── core identification ──────────────────────────────────────────────────
     tower: int = Field(..., ge=1, le=4, description="Tower identifier, e.g. 3")
     date_str: str = Field(..., description="Date in M/D/YYYY or MM/DD/YYYY format")
-    hour: int = Field(..., ge=0, le=23, description="Hour of day (0-23)")
+    hour: int = Field(..., ge=6, le=21, description="Targeted hour of day (6-21)")
     minutes_past_hour: int = Field(..., description="Minutes past the hour — must be 0, 20, or 40")
-    num_adults: int = Field(..., ge=0, description="Number of adult swifts seen")
+    num_adults: int = Field(0, ge=0, le=10, description="Number of adult swifts seen (0-10)")
+    num_adults_other: Optional[str] = Field(None, description="Free-text adult count when it exceeds 10")
     nesting_stage: str = Field(..., description="Short code for nesting stage (see NESTING_STAGE_CODE_TO_TEXT)")
-    bill_use: str = Field(..., description="Short code for bill use (see BILL_USE_CODE_TO_TEXT)")
-    flights: List[str] = Field(default_factory=list, min_length=0, max_length=3, description="Short codes for flight activity")
-    num_near_nest: int = Field(..., ge=0, description="Number of swifts near the nest")
+    bill_use: List[str] = Field(default_factory=list, min_length=1, max_length=7, description="Short code for bill use (see BILL_USE_CODE_TO_TEXT)")
+    flights: List[str] = Field(default_factory=list, min_length=1, max_length=3, description="Short codes for flight activity (see FLIGHTS_TRANSLATION)")
+    num_near_nest: int = Field(0, ge=0, le=5, description="Number of swifts near the nest (0-5)")
+    num_near_nest_other: Optional[str] = Field(None, description="Free-text near-nest count when not 1-5 or N/A")
     awake: str = Field(..., description="Short code for awake status (see AWAKE_CODE_TO_TEXT)")
     notes: Optional[str] = Field(None, description="Free-form notes")
 
     # ── validators ───────────────────────────────────────────────────────────
+
+    @model_validator(mode="before")
+    @classmethod
+    def preprocess_num_fields(cls, data):
+        """Convert string inputs for num_adults and num_near_nest, setting _other fields."""
+        if isinstance(data, dict):
+            raw = data.get("num_adults", "0")
+            if isinstance(raw, str):
+                try:
+                    val = int(raw)
+                    if 0 <= val <= 10:
+                        data["num_adults"] = val
+                        data["num_adults_other"] = None
+                    else:
+                        data["num_adults"] = 0
+                        data["num_adults_other"] = raw
+                except (ValueError, TypeError):
+                    data["num_adults"] = 0
+                    data["num_adults_other"] = raw
+
+            raw = data.get("num_near_nest", "0")
+            if isinstance(raw, str):
+                if raw.lower() in ("na", "0"):
+                    data["num_near_nest"] = 0
+                    data["num_near_nest_other"] = "N/A or Zero"
+                else:
+                    try:
+                        val = int(raw)
+                        if 1 <= val <= 5:
+                            data["num_near_nest"] = val
+                            data["num_near_nest_other"] = None
+                        else:
+                            data["num_near_nest"] = 0
+                            data["num_near_nest_other"] = raw
+                    except (ValueError, TypeError):
+                        data["num_near_nest"] = 0
+                        data["num_near_nest_other"] = raw
+        return data
 
     @field_validator("date_str")
     @classmethod
@@ -100,12 +145,24 @@ class ObservationRecord(BaseModel):
             )
         return v
 
+    @field_validator("bill_use", mode="before")
+    @classmethod
+    def parse_bill_use(cls, v):
+        """Accept semicolon-delimited short codes or JSON arrays."""
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                v = json.loads(v)
+            else:
+                v = [item.strip() for item in v.split(";") if item.strip()]
+        return v
+
     @field_validator("bill_use")
     @classmethod
-    def validate_bill_use(cls, v: str) -> str:
-        if v not in BILL_USE_CODES:
+    def validate_bill_use(cls, v: List[str]) -> List[str]:
+        if not all(item in BILL_USE_CODES for item in v):
             raise ValueError(
-                f"bill_use must be one of {sorted(BILL_USE_CODES)}, got {v!r}"
+                f"bill_use must be a list of codes from {sorted(BILL_USE_CODES)}, got {v!r}"
             )
         return v
 
@@ -176,12 +233,14 @@ class ObservationRecord(BaseModel):
             "date": self.date_str,
             "time_of_day": self.time_of_day,
             "adult_swallows_in_chimney": self.num_adults,
+            "adult_swallows_in_chimney_other": self.num_adults_other,
             "nesting_stage": self._expand(self.nesting_stage, NESTING_STAGE_CODE_TO_TEXT),
-            "bill_use": self._expand(self.bill_use, BILL_USE_CODE_TO_TEXT),
+            "bill_use": [self._expand(code, BILL_USE_CODE_TO_TEXT) for code in self.bill_use],
             "adults_flew_in": [
                 FLIGHTS_TRANSLATION[code] for code in self.flights
             ],
             "swallows_near_nest": self.num_near_nest,
+            "swallows_near_nest_other": self.num_near_nest_other,
             "awake": self._expand(self.awake, AWAKE_CODE_TO_TEXT),
             "notes": self.notes or "",
         }

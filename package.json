@@ -1,8 +1,5 @@
 {
   "devDependencies": {
     "excalidraw-to-svg": "^3.1.0"
-  },
-  "dependencies": {
-    "playwright": "^1.62.1"
   }
 }

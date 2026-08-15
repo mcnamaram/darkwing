@@ -55,13 +55,13 @@ def test_validate_bad_csv(tmp_path, capsys):
 # ── submit subcommand ─────────────────────────────────────────────────────────
 
 def test_submit_dry_run(sample_csv, mock_env, monkeypatch, capsys):
-    monkeypatch.setenv("DARKWING_APPS_SCRIPT_URL",
-                       "https://script.google.com/macros/s/test/exec")
+    monkeypatch.setenv("DARKWING_FORM_URL",
+                       "https://docs.google.com/forms/d/test")
     rc = main(["submit", "--dry-run", str(sample_csv)])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "DRY RUN" in captured.out
-    assert "submitted" in captured.out
+    assert "would be submitted" in captured.out.lower()
+    assert "submitted" in captured.out.lower()
 
 
 def test_submit_real(sample_csv, mock_env, monkeypatch, capsys):
@@ -71,9 +71,8 @@ def test_submit_real(sample_csv, mock_env, monkeypatch, capsys):
     mock_resp.json.return_value = {"status": "success"}
     mock_resp.raise_for_status.return_value = None
 
-    with patch("darkwing.form_submit.requests.post", return_value=mock_resp):
-        with patch("darkwing.form_submit.get_token", return_value="token"):
-            rc = main(["submit", str(sample_csv)])
+    with patch("darkwing.form_submit.submit_observation", return_value=True):
+        rc = main(["submit", str(sample_csv)])
 
     assert rc == 0
     captured = capsys.readouterr()

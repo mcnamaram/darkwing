@@ -2,3 +2,5 @@ pydantic>=2.13
 requests>=2.34
 pytest>=9.1
 python-dotenv>=1.0.1
+pytest-playwright>=1.62.0
+pytest-playwright-asyncio>=0.9.0

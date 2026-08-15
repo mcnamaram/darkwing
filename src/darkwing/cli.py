@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from darkwing.csv_io import read_csv
 from darkwing.form_submit import submit_csv_records
-from darkwing.schema import ObservationRecord
+import asyncio
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -16,9 +16,11 @@ def cmd_validate(args: argparse.Namespace) -> int:
     try:
         records = read_csv(Path(args.csv_path))
         print(f"✓ {len(records)} record(s) validated successfully.")
-        for r in records:
-            print(f"  - {r.tower}  {r.date_str} {r.time_of_day}  "
-                  f"{r.num_adults} adult(s)  {r.nesting_stage}")
+        if records:
+            print("Tower  Date       Time   Adults      Nesting Stage")
+            for r in records:
+                print(f"  - {r.tower}  {r.date_str} {r.time_of_day}  "
+                    f"{r.num_adults} adult(s)  {r.nesting_stage}")
         return 0
     except Exception as exc:
         print(f"✗ Validation failed: {exc}", file=sys.stderr)
@@ -39,17 +41,20 @@ def cmd_submit(args: argparse.Namespace) -> int:
 
     print(f"Submitting {len(records)} record(s) to the form...")
     try:
-        results = submit_csv_records(
+        results = asyncio.run(submit_csv_records(
             records,
             dry_run=args.dry_run,
-        )
+        ))
     except Exception as exc:
         print(f"✗ Submission failed: {exc}", file=sys.stderr)
         return 1
 
     succeeded = sum(1 for r in results if r.get("status") == "success"
                     or r.get("status") == "dry-run")
-    print(f"✓ {succeeded}/{len(records)} record(s) submitted.")
+    if args.dry_run:
+        print(f"✓ {succeeded}/{len(records)} record(s) would be submitted (dry run).")
+    else:
+        print(f"✓ {succeeded}/{len(records)} record(s) submitted.")
     return 0
 
 

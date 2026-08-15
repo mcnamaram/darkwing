@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional
+from typing import Dict, Iterable, Iterator, List
 
 from darkwing.schema import ObservationRecord, parse_observation_row
 

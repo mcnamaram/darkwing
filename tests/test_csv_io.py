@@ -61,9 +61,9 @@ def test_read_csv_last_row(valid_records):
 
 
 def test_read_csv_empty_flights(valid_records: list):
-    """Row with empty flights array parses correctly."""
+    """Row with no flight activity still parses with default 'non'."""
     r = valid_records[2]  # the "0 adults, no flight" row
-    assert r.flights == []
+    assert r.flights == ["non"]
     assert r.num_adults == 0
 
 
