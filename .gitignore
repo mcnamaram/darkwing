@@ -57,4 +57,4 @@ __pycache__/
 obs.csvnode_modules/
 .hermes/cache/
 google_profile/
-obs.csv
+obs.*

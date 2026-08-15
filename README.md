@@ -4,7 +4,7 @@ Automated, structured observation reporting for Chimney Swifts.
 
 ## Overview
 
-DarkWing reads a CSV of curated observations, validates each row, expands short codes into the Google Form's long-form text, and submits them one at a time via a Google Apps Script `doPost` webhook. The webhook constructs and submits the form responses on your behalf. A local JSON-Lines log file (`submitted_log.jsonl`) records every attempt.
+DarkWing reads a CSV of curated observations, validates each row, expands short codes into the Google Form's long-form text, and submits them one at a time via Playwright browser automation. A local JSON-Lines log file (`submitted_log.jsonl`) records every attempt.
 
 **What this is:** A batch-submission tool for volunteer chimney swift observers who fill out a Google Form many times per day. One CSV row = one form response.
 
@@ -18,19 +18,19 @@ git clone https://github.com/mcnamaram/darkwing.git
 cd darkwing
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 
-# Configure — see docs/setup.md for full instructions
-cp .env.example .env   # (create manually; see docs)
-gcloud auth login
+# Configure
+cp .env.example .env   # edit with your values
+playwright install chromium
 
 # Validate a CSV
 darkwing validate observations.csv
 
-# Dry-run submit
+# Dry-run submit (no browser)
 darkwing submit observations.csv --dry-run
 
-# Submit for real
+# Submit for real (opens visible browser)
 darkwing submit observations.csv
 ```
 
@@ -38,80 +38,59 @@ See [docs/setup.md](docs/setup.md) for full setup. See [docs/tutorial-1.md](docs
 
 ## CLI
 
-```
+```sh
 darkwing {validate,submit} path/to/file.csv [--dry-run]
 ```
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `validate <csv>` | Reads and validates every row against the Pydantic schema. Prints summary. Exit 0 = clean, 1 = errors. |
-| `submit <csv> --dry-run` | Validates, expands short codes, prints what *would* be submitted. No network calls. |
-| `submit <csv>` | Validates, expands short codes, POSTs each row to the Apps Script webhook. Logs every attempt to `submitted_log.jsonl`. |
+| `submit <csv> --dry-run` | Validates, expands short codes, prints what *would* be submitted. No browser launched. |
+| `submit <csv>` | Validates, expands short codes, opens browser, fills Google Form for each row. |
 
-## CSV format
+## CSV Format
 
-The `flights` column uses semicolon-delimited short codes (no quoting needed):
+One row per 20-minute observation window:
 
 ```csv
 tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
 3,6/15/2026,6,0,2,no,na,in;chg,1,y,1 north, 1 west
+3,6/15/2026,6,20,0,no,na,non,0,nap,
 ```
 
-| Column | Example | Notes |
-|---|---|---|
-| `tower` | `3` | Maps to "Tower 3" on the form |
-| `date_str` | `6/15/2026` | M/D/YYYY or MM/DD/YYYY — auto-normalised |
-| `hour` | `6` | 0–23 |
-| `minutes_past_hour` | `0` | Any integer 0–59 |
-| `num_adults` | `2` | ≥ 0 |
-| `nesting_stage` | `no` | Short code → "No nest", "Nest building", etc. |
-| `bill_use` | `na` | Short code → "N/A or No", "Yes, handling a stick", etc. |
-| `flights` | `in;chg` | Semicolon-delimited short codes: `in`, `out`, `chg`, `non`. Empty = no flights. Legacy JSON arrays like `["in"]` still parse. |
-| `num_near_nest` | `1` | ≥ 0 |
-| `awake` | `y` | `y`, `n`, `mbe`, `nap` |
-| `notes` | `1 north, 1 west` | Free text |
+**Short codes used:**
 
-Translation tables are in `src/darkwing/schema.py`.
+| Column | Codes | Meaning |
+| --- | --- | --- |
+| `nesting_stage` | `no`, `bld`, `egg`, `nst`, `fld` | No nest / Nest building / Egg(s) / Nestling(s) / Post-fledgling |
+| `bill_use` | `na`, `mat`, `fd`, `egg`, `nst`, `ps`, `po`, `oth` | N/A / Material / Feeding / Egg tending / Nestling tending / Self-preening / Other-preening / Other |
+| `flights` | `in`, `out`, `chg`, `non` | Flew in / Flew out / Changed position / None |
+| `awake` | `y`, `n`, `mbe`, `nap` | Yes / No / Maybe / No adults present |
 
-## Project structure
+Semicolon-delimited for multi-select fields (e.g., `in;chg`).
 
-```
-src/darkwing/
-  schema.py       # Pydantic models + short-code → form-text tables
-  csv_io.py       # CSV read (DictReader) + JSON-Lines submission log
-  form_submit.py  # HTTP POST to Apps Script webhook
-  auth.py         # gcloud OAuth token retrieval + 50-min cache
-  cli.py          # argparse CLI (validate / submit)
-tests/
-  fixtures/sample_observation.csv   # tiny live CSV for tests
-  test_schema.py, test_csv_io.py,
-  test_form_submit.py, test_auth.py, test_cli.py
-docs/          # MkDocs (Material) site, deployed to GitHub Pages
-```
+## Environment Variables
 
-## Tech
+Copy `.env.example` to `.env` and set:
 
-- **Python 3.14** (pinned in `.python-version`)
-- **pydantic v2** — row validation and short-code expansion
-- **requests** — HTTP POST to the Apps Script webhook
-- **python-dotenv** — reads `.env` for config
-- **pytest** — 92 tests covering schema, CSV I/O, auth, submission, and CLI
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DARKWING_FORM_URL` | Yes | Full URL of the Google Form |
+| `DARKWING_SUBMITTER_NAME` | Yes | Name to fill in the "Name" field |
+| `DARKWING_HEADLESS` | No | `true` (default) or `false` for visible browser |
 
-## Docs site
+## Architecture
 
-Built with MkDocs (Material theme) and auto-deployed to GitHub Pages on every push to `main`. Local preview:
-
-```bash
-pip install mkdocs mkdocs-material
-mkdocs serve
-```
-
-Navigate to <http://localhost:8000>.
+See [docs/architecture.md](docs/architecture.md) for component details.
 
 ## Testing
 
 ```bash
-.venv/bin/pytest -v
+.venv/bin/pytest tests/
 ```
 
-92 tests, all passing.
+84 tests covering schema validation, CSV I/O, CLI, and form submission.
+
+## License
+
+MIT

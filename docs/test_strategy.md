@@ -1,80 +1,37 @@
 # Test Strategy
 
-This document describes how the system is validated. The strategy is deliberately modest: MVP1 is a small system and the tests should match.
+> Last updated: 2026-08-15.
 
-## Goals
+## Philosophy
 
-1. **Every schema rule is covered by at least one test.** A form change that breaks a field's validation should be caught by a failing test, not by a 4xx response in production.
-2. **The submission code path is exercised against a mocked HTTP boundary, not a real one.** The real Apps Script is exercised by the human in the tutorial; CI does not depend on it.
-3. **The auth code path is exercised against a mocked `gcloud` CLI, not a real one.** Same reasoning.
-4. **Coverage is ≥ 90% on `src/darkwing/`.** The CLI is a thin wrapper exercised by the integration tests.
+- **Fast, deterministic unit tests** are the default — no network, no browser, no live Google Form.
+- **Dry-run flows** are tested without ever launching Chromium.
+- **Browser automation** is tested by mocking `load_form` and `submit_observation`; real browser runs happen manually (`DARKWING_HEADLESS=false`) during smoke testing.
 
-## What is in the suite
+## What's covered (84 tests)
 
-### `tests/test_schema.py` — the Golden Schema
+| Area | File | What's tested |
+| --- | --- | --- |
+| Schema | `tests/test_schema.py` | Validation of every field, short-code lookups, defaults, error messages |
+| CSV I/O | `tests/test_csv_io.py` | Reading valid/invalid CSVs, multi-value splitting (`;`), BOM, blank lines |
+| Form submit | `tests/test_form_submit.py` | `dry_run` short-circuits (never launches browser), per-record error capture, multiple records |
+| CLI | `tests/test_cli.py` | `validate` exit codes, `submit --dry-run` output, missing file handling |
 
-One test per rule, with a positive case and (where applicable) a negative case.
+## What's NOT covered
 
-- `flights` accepts semicolon-delimited short codes (`in`, `in;out`) and legacy JSON arrays (`["in"]`) for backwards compatibility.
-- `flights` is a list of 0–3 strings, each from the form's four enum values (`in`, `out`, `chg`, `non`).
-- `date_str` matches `M/D/YYYY` (e.g. `6/15/2026`) and is normalised to `MM/DD/YYYY`.
-- `hour` is an integer in `[0, 23]`.
-- `minutes_past_hour` is an integer in `[0, 59]`.
-- `num_adults` is a non-negative integer.
-- `nesting_stage` is one of the form's five enum codes (`no`, `bld`, `egg`, `nst`, `fld`).
-- `bill_use` is one of the form's eight enum codes (`na`, `mat`, `fd`, `egg`, `nst`, `ps`, `po`, `oth`).
-- `awake` is one of the form's four enum codes (`y`, `n`, `mbe`, `nap`).
-- `notes` is a string (may be empty).
+- **Live Google Form submission.** No CI job posts to the real form. Done manually via `DARKWING_HEADLESS=false darkwing submit`.
+- **Google login** — a one-time manual step; the persistent profile (`google_profile/`) holds the session.
 
-### `tests/test_csv_io.py` — CSV I/O
-
-- `read_csv` yields one `ObservationRecord` per non-empty data line.
-- `read_csv` parses semicolon-delimited `flights` values correctly.
-- `read_csv` raises a single `ValueError` with per-row details when any row fails validation.
-- `write_submission_log` appends JSON lines to a file.
-- `get_submission_log` reads the file back.
-
-### `tests/test_form_submit.py` — HTTP submission
-
-- `submit_record` POSTs to the Apps Script URL with the correct `Authorization: Bearer` header.
-- `submit_record` expands short codes via `to_form_payload()`.
-- `submit_csv_records` posts each record individually and returns a list of results.
-- `--dry-run` skips the POST and returns mock results.
-
-### `tests/test_auth.py` — OAuth token
-
-- `get_token` calls `gcloud auth print-access-token` and caches the result for 50 minutes.
-- Expired tokens are refreshed on demand.
-
-### `tests/test_cli.py` — CLI entry point
-
-- `darkwing validate <csv>` returns 0 for valid input, 1 for invalid.
-- `darkwing submit <csv> --dry-run` prints rows without making HTTP calls.
-- `darkwing submit <csv>` calls the submission code path.
-- `darkwing --help` exits 0 and prints usage.
-
-## Test data
-
-The fixture `tests/fixtures/sample_observation.csv` is a real CSV with four rows covering common cases: single flight, multiple flights, empty flights, and no adults present. It is used by both `test_csv_io.py` and `test_cli.py`.
-
-## Validation pipeline
-
-![Validation state machine: raw CSV row → type coercion → domain check → ObservationRecord or ValidationError](img/validation_state.svg)
-
-## Running the suite
+## Running tests
 
 ```bash
-.venv/bin/pytest -v
-.venv/bin/pytest -v --tb=short   # shorter traces
-.venv/bin/pytest -k "flights"    # only flights-related tests
+.venv/bin/pytest            # full suite
+.venv/bin/pytest tests/test_schema.py -v   # single file
 ```
 
-## Coverage
+## Browser smoke procedure
 
-Run with pytest-cov to check coverage:
-
-```bash
-.venv/bin/pytest --cov=src/darkwing --cov-report=term-missing -v
-```
-
-Target: ≥ 90% on `src/darkwing/`.
+1. `cp .env.example .env` and set `DARKWING_FORM_URL` + `DARKWING_SUBMITTER_NAME`.
+2. `DARKWING_HEADLESS=false .venv/bin/darkwing submit tests/fixtures/sample_observation.csv`
+3. Watch the browser fill the form.
+4. Verify the form's response spreadsheet has a new row.

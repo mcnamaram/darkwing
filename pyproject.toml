@@ -9,10 +9,14 @@ description = "Automated observation reporting for Chimney Swifts"
 requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.13",
-    "requests>=2.34",
-    "python-dotenv>=1.0.1",
     "playwright>=1.40",
-    "playwright-stealth>=2.0.3"
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1",
+    "pytest-playwright>=1.62.0",
 ]
 
 [project.scripts]

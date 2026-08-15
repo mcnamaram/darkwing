@@ -48,7 +48,11 @@ def test_submit_csv_records_dry_run(sample_record, mock_env):
 def test_submit_csv_records_real(sample_record, mock_env):
     """Real submission returns error status when browser unavailable."""
     import asyncio
-    results = asyncio.run(submit_csv_records([sample_record], dry_run=False))
+    from unittest.mock import AsyncMock, MagicMock, patch
+    with patch("darkwing.form_submit.load_form", new=AsyncMock(return_value=(MagicMock(), MagicMock()))):
+        with patch("darkwing.form_submit.submit_observation", new=AsyncMock(side_effect=Exception("no browser"))):
+            with patch("darkwing.form_submit.unload_form", new=AsyncMock()):
+                results = asyncio.run(submit_csv_records([sample_record], dry_run=False))
 
     assert len(results) == 1
     assert results[0]["status"] == "error"
@@ -58,14 +62,22 @@ def test_submit_csv_records_real(sample_record, mock_env):
 def test_submit_csv_records_error(sample_record, mock_env):
     """Error during submission should return error status."""
     import asyncio
-    results = asyncio.run(submit_csv_records([sample_record], dry_run=False))
+    from unittest.mock import AsyncMock, MagicMock, patch
+    with patch("darkwing.form_submit.load_form", new=AsyncMock(return_value=(MagicMock(), MagicMock()))):
+        with patch("darkwing.form_submit.submit_observation", new=AsyncMock(side_effect=Exception("form error"))):
+            with patch("darkwing.form_submit.unload_form", new=AsyncMock()):
+                results = asyncio.run(submit_csv_records([sample_record], dry_run=False))
     assert results[0]["status"] == "error"
 
 
 def test_submit_csv_records_multiple(sample_record, mock_env):
     """Multiple records are processed individually."""
     import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
     records = [sample_record, sample_record]
-    results = asyncio.run(submit_csv_records(records, dry_run=False))
+    with patch("darkwing.form_submit.load_form", new=AsyncMock(return_value=(MagicMock(), MagicMock()))):
+        with patch("darkwing.form_submit.submit_observation", new=AsyncMock(side_effect=Exception("fail"))):
+            with patch("darkwing.form_submit.unload_form", new=AsyncMock()):
+                results = asyncio.run(submit_csv_records(records, dry_run=False))
     assert len(results) == 2
-    assert all(r["status"] == "error" for r in results)  # no real browser
+    assert all(r["status"] == "error" for r in results)

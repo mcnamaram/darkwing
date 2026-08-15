@@ -1,46 +1,42 @@
 # Secrets Handling
 
-This project is hosted in a public Git repository. Anything that lands on the `main` branch is, by default, public. This document enumerates what must never be committed and what the operational safeguards are.
+> Last updated: 2026-08-15. Now that DarkWing drives a real browser (Playwright), the secret surface is much smaller than the old gcloud/Apps Script era.
 
 ## What is sensitive
 
-- **The Google Apps Script `/exec` URL.** Identifies the user's Apps Script deployment. Compromising it lets an attacker submit forms as the user.
-- **The Google Form ID** (the long string in the form's URL, e.g. `1FAIpQLSd…O4delw`). Identifies the form. Compromising it lets an attacker target the form.
-- **The `gcloud` OAuth access token** (the value of `gcloud auth print-access-token`). Authorizes any API the token's user can call. Compromising it lets an attacker act as the user for the token's lifetime (≤ 60 minutes).
-- **Google session cookies** (`__Secure-1PSID`, `__Secure-OSID`, `NID`, `SID`, etc.) — the kind captured by browser DevTools or by `curl -b`. Compromising them lets an attacker impersonate the user's Google account in a browser, until the cookies are rotated.
-- **Camera credentials** (IP, username, password) for the Reolink cameras. The MVP2+ video-download epic will introduce these. They are *not* yet in the repo; when they are, they go in a `camera.cfg` (per the upstream `reolinkapipy` example) that is gitignored.
+- **The Google Form URL / Form ID.** The long string in the form's URL (e.g. `1FAIpQLSd…O4delw`) identifies a live form. It's not a credential per se — volunteers are given the form link — but treat it as internal.
+- **`DARKWING_SUBMITTER_NAME`.** The name that appears in every submitted response. Personal data of the observer.
+- **The browser profile directory (`google_profile/`).** Contains the user's **real Google session cookies** (`__Secure-1PSID`, `__Secure-OSID`, `NID`, …) after they log in once. This is live-session data: whoever holds it can act as the Google account in a browser. **Never commit it.**
+- **`.env`** — holds `DARKWING_FORM_URL`, `DARKWING_SUBMITTER_NAME`. Gitignored.
+
+## What is NOT sensitive anymore
+
+| Gone | Why |
+| --- | --- |
+| `gcloud auth print-access-token` | No API calls; the browser handles auth |
+| Custom OAuth client & refresh tokens | No `script.scriptapp` scope needed |
+| Apps Script `/exec` URL | No webhook |
+| Google session cookies in curl captures | Browser profile replaces them |
 
 ## How the project keeps secrets out
 
-1. **`.gitignore` patterns** explicitly block:
-   - `.env`, `.env.*` — the user's environment file with `DARKWING_APPS_SCRIPT_URL`, `DARKWING_FORM_ID`, `DARKWING_SUBMITTER_EMAIL`, etc.
-   - `camera.cfg`, `*.cfg` — the camera credential file (added in MVP2; the pattern is in place now to prevent future mistakes).
-   - `googleforms` — a legacy filename for curl captures that have contained live session cookies in the past.
-   - `PROGRESS_LOG.md` — kept out of the repo because it documents features that never existed; replaced by commit messages and the live docs.
-   - `.hermes/`, `.vscode/`, `.venv/`, `__pycache__/`, `site/`, `*.local`, `*.swp` — local-only and build artifacts.
+1. **`.gitignore` blocks:**
+   - `.env`, `.env.*`
+   - `google_profile/` — the browser session
+   - `camera.cfg`, `*.cfg` — reserved for MVP2 camera credentials
+   - `.venv/`, `__pycache__/`, `site/`, etc.
 
-2. **No secret is ever read from a file that could be committed.** The `DARKWING_*` values come from environment variables loaded via `python-dotenv` from a `.env` file in the project root. The `.env` file is gitignored. The CI workflow does not have access to these variables; the docs site deploys without them.
+2. **No secret is ever read from a file that could be committed.** `DARKWING_*` values come from environment variables loaded via `python-dotenv` from `.env` (gitignored).
 
-3. **No captured auth headers are pasted into source files or commit messages.** A `curl -H 'Cookie: ...'` capture has no business in a `.py` file, a Markdown doc, a test fixture, or a commit message. The legitimate path is to retrieve the token at runtime via `gcloud auth print-access-token`.
-
-4. **The submission log never contains tokens.** `submitted_log.jsonl` records `uuid`, `timestamp_utc`, `http_status`, `attempt_count`, and (for failed rows) the error message. It does not record the bearer token, the request body, or the Apps Script URL.
+3. **The submission log never contains secrets.** `submitted_log.jsonl` records only the record, status, error, and timestamp — no form URL, no profile path, no cookie data.
 
 ## What to do if a secret is committed
 
-1. **Rotate the secret immediately.** For a Google account, sign out of all sessions and let cookies expire (or use Google's security page to revoke them). For a `gcloud` token, run `gcloud auth revoke` to invalidate it.
-2. **Remove the secret from history.** If the secret landed in a commit, use `git filter-repo` (recommended) or `git filter-branch` to scrub it. This requires a force-push and a notification to anyone who has cloned the repo.
-3. **Audit access.** If the secret was a Google session cookie, check the Google account's security log for unfamiliar activity. If it was a camera credential, check the camera's web UI for unfamiliar logins.
-4. **Add a regression test.** A test that fails when the secret pattern is detected in tracked files is a cheap, durable safeguard. The pattern of `.gitignore` plus a CI check is the standard "shift left" answer.
+1. **Rotate it immediately.** For a Google session: use the Google account's security page to revoke sessions / sign out everywhere. For a form URL: the form ID can't be rotated, but you can close the form and recreate it.
+2. **Remove the secret from history.** Use `git filter-repo` (recommended) or `git filter-branch`, then force-push and notify anyone who has cloned.
+3. **Audit access.** Check the Google account's security log for unfamiliar activity.
+4. **Add a regression test.** A test that fails when a secret pattern is detected in tracked files is a cheap safeguard.
 
-## If a captured header file lands in your local working tree
+## Operational note
 
-Captures from `curl -v` or browser DevTools frequently contain live session cookies. They are dangerous even when they don't leave the local machine — disk snapshots, sync clients, and `git add .` habits can move them unexpectedly. If a capture file lands in the repo:
-
-1. `git restore --staged <file>` to remove it from the index.
-2. `rm <file>` to remove it from the working tree.
-3. Verify with `git status` that the file is no longer present.
-4. Rotate the session cookies (sign out of the Google session).
-5. Verify the blob is not in any commit with `git log --all --oneline -- <file>` and `git rev-list --all --objects | grep <hash>`.
-6. The blob may still exist in `.git/objects/` for up to 90 days as an unreachable object. If the local environment is shared or backed up offsite, consider a more thorough purge (`rm -rf .git && git init && git remote add origin … && git fetch origin && git reset --hard origin/main`). The decision depends on your threat model.
-
-The default project policy is **"if it was never pushed, no purge needed, but the secret is still considered compromised"** — because the file existed on disk in a known location for an unknown duration.
+The `google_profile/` directory is created **at runtime** in the project root by `launch_persistent_context`. If you delete it, the user simply logs into Google again on the next `submit` run. If your machine is shared, delete it after each session (`rm -rf google_profile/`).

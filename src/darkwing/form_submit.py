@@ -24,6 +24,13 @@ async def submit_csv_records(records, dry_run=False):
         - 'status': 'success', 'dry-run', or 'error'
         - 'error': error message if status is 'error'
     """
+    if dry_run:
+        results = [
+            {'record': rec, 'status': 'dry-run', 'error': None}
+            for rec in records
+        ]
+        return results
+
     p, context = await load_form()
     try:
         results = []

@@ -1,14 +1,14 @@
 # Tutorial: Your First Submission
 
-This tutorial walks a new user through submitting a small CSV of observation rows to the Google Form. By the end, you will have a `submitted_log.jsonl` file recording each attempt and (assuming the Apps Script `doPost` is deployed) new entries in the form's responses sheet.
+This tutorial walks a new user through submitting a small CSV of observation rows to the Google Form. By the end, you will have submitted records and seen them appear in the form's responses.
 
 ## Prerequisites
 
 You have followed [Setup](./setup.md) and have:
 
-- An active `.venv` with the package installed (`pip install -e .`).
-- A `.env` file with the required `DARKWING_*` variables set.
-- A working `gcloud auth print-access-token` (verified by running it in a shell).
+- An active `.venv` with the package installed (`pip install -e .[dev]`).
+- A `.env` file with `DARKWING_FORM_URL` and `DARKWING_SUBMITTER_NAME` set.
+- Playwright browsers installed (`playwright install chromium`).
 
 ## 1. Create a test CSV
 
@@ -20,7 +20,7 @@ tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,
 3,6/15/2026,6,20,0,no,na,non,0,nap,
 ```
 
-The column names are exactly what `to_form_payload()` expects. `flights` uses semicolon-delimited short codes (e.g. `in` or `in;out`); `num_adults` is an integer; `awake` accepts the four enum values exactly as the form spells them.
+The column names match the Pydantic schema. `flights` uses semicolon-delimited short codes (e.g. `in` or `in;out`).
 
 ## 2. Validate the CSV
 
@@ -28,7 +28,7 @@ The column names are exactly what `to_form_payload()` expects. `flights` uses se
 .venv/bin/darkwing validate ~/Desktop/test_observations.csv
 ```
 
-Expected output: `2 row(s) validated successfully.` If you see schema errors, the message points at the offending row and column.
+Expected output: `2 record(s) validated successfully.`
 
 ## 3. Dry-run the submission
 
@@ -36,7 +36,7 @@ Expected output: `2 row(s) validated successfully.` If you see schema errors, th
 .venv/bin/darkwing submit ~/Desktop/test_observations.csv --dry-run
 ```
 
-Expected output: a table of the two rows that *would* be submitted, with their target form fields. No network calls. No log file written.
+Expected output: a summary showing 2 records would be submitted. No browser opens.
 
 ## 4. Submit for real
 
@@ -44,29 +44,24 @@ Expected output: a table of the two rows that *would* be submitted, with their t
 .venv/bin/darkwing submit ~/Desktop/test_observations.csv
 ```
 
+A Chromium browser opens, navigates to the form, and fills it out automatically.
+
 Expected output:
 
-```
-Submitting 2 record(s) to the form...
-[1/2] uuid=… status=200
-[2/2] uuid=… status=200
-✓ 2/2 record(s) submitted.
-```
-
-Each row is posted individually. A `submitted_log.jsonl` file is created in the repo root with one JSON line per attempt.
-
-## 5. Inspect the log
-
-```bash
-cat submitted_log.jsonl | head
+```sh
+success: 3 06/16/2026 07:00
+success: 3 06/16/2026 07:20
+...
 ```
 
-Each line is a JSON object: `{uuid, timestamp_utc, tower, time_of_day, http_status, attempt_count, error?}`.
+A `submitted_log.jsonl` file records each attempt.
+
+## 5. Verify
+
+Check the Google Form responses sheet — you should see 2 new entries.
 
 ## Troubleshooting
 
-**"DARKWING_APPS_SCRIPT_URL not set"** — Check that `.env` exists and contains the variable. Run `gcloud auth print-access-token` to verify your token is fresh.
-
-**401/403 from the webhook** — Your Google account may not have access to the form or the Apps Script deployment. Re-run `gcloud auth login` and verify the account matches the one that deployed the script.
-
-**Schema errors** — The CSV column names must match exactly (case-sensitive). The `flights` column accepts semicolons (`in;out`) or JSON arrays (`["in","out"]`) for backwards compatibility.
+- **Browser doesn't open**: Ensure `DARKWING_FORM_URL` is set correctly in `.env`.
+- **Timeout errors**: The form may be slow to load. Try `DARKWING_HEADLESS=false` to watch what's happening.
+- **Selector errors**: The form may have changed. Check [architecture.md](./architecture.md) for current selectors.

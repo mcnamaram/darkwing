@@ -61,7 +61,7 @@
 <path d="M1030.86 110.96 C1061.68 111.16,1093.44 108.27,1189.21 110.39 M1029.35 110.26 C1065.86 110.81,1100.92 110.24,1189.42 110.75 M1191.54 108.25 C1191.10 126.46,1191.79 138.81,1191.39 179.13 M1190.30 109.20 C1190.24 127.93,1189.27 147.60,1190.41 180.35 M1191.05 179.79 C1156.52 179.81,1119.30 179.26,1031.84 179.60 M1189.06 179.86 C1129.77 180.26,1070.50 179.99,1030.94 180.04 M1029.28 179.72 C1031.26 158.39,1029.53 140.03,1030.59 108.79 M1030.22 181.00 C1029.22 153.88,1029.73 128.17,1030.44 110.99" stroke="#1e1e1e" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <g transform="translate(10.00,-40.00)">
-<text x="1110.00" y="141.00" font-family="Virgil, Segoe UI Emoji, cursive" font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1110.00" dy="0">form_submit</tspan><tspan x="1110.00" dy="20">(gcloud token, POST)</tspan></text>
+<text x="1110.00" y="141.00" font-family="Virgil, Segoe UI Emoji, cursive" font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1110.00" dy="0">form_submit</tspan><tspan x="1110.00" dy="20">(Playwright, Chromium)</tspan></text>
 </g>
 <g transform="translate(10.00,-40.00)">
 <path d="M1190.86 155.96 C1209.68 156.16,1229.44 153.27,1289.21 155.39 M1189.35 155.26 C1212.57 155.81,1234.36 155.24,1289.42 155.75" stroke="#1e1e1e" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -73,7 +73,7 @@
 <path d="M1300.86 80.96 C1331.68 81.16,1363.44 78.27,1459.21 80.39 M1299.35 80.26 C1335.86 80.81,1370.92 80.24,1459.42 80.75 M1461.54 78.25 C1461.10 96.46,1461.79 108.81,1461.39 149.13 M1460.30 79.20 C1460.24 97.93,1459.27 117.60,1460.41 150.35 M1461.05 149.79 C1426.52 149.81,1389.30 149.26,1301.84 149.60 M1459.06 149.86 C1399.77 150.26,1340.50 149.99,1300.94 150.04 M1299.28 149.72 C1301.26 128.39,1299.53 110.03,1300.59 78.79 M1300.22 151.00 C1299.22 123.88,1299.73 98.17,1300.44 80.99" stroke="#1e1e1e" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <g transform="translate(10.00,-40.00)">
-<text x="1380.00" y="111.00" font-family="Virgil, Segoe UI Emoji, cursive" font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1380.00" dy="0">Apps Script doPost</tspan><tspan x="1380.00" dy="20">(FormApp.createResponse)</tspan></text>
+<text x="1380.00" y="111.00" font-family="Virgil, Segoe UI Emoji, cursive" font-size="16" fill="#1e1e1e" text-anchor="middle"><tspan x="1380.00" dy="0">Google Form</tspan><tspan x="1380.00" dy="20">(real browser fill)</tspan></text>
 </g>
 <g transform="translate(10.00,-40.00)">
 <path d="M1110.86 180.96 C1109.68 193.16,1109.44 202.27,1109.21 240.39 M1109.35 180.26 C1110.44 194.09,1110.09 206.81,1109.42 240.75" stroke="#1e1e1e" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>

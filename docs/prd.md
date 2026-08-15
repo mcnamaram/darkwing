@@ -16,13 +16,13 @@ The Wild Bird Recovery research program operates Reolink cameras pointed at Chim
 
 ## The approach
 
-A small Python package reads a curated CSV (one row per observation) and submits each row, one at a time, to a Google Apps Script `doPost` webhook running in the user's account. The webhook constructs a Google Form response and submits it through the form's authenticated path. The Python code:
+A small Python package reads a curated CSV (one row per observation) and submits each row, one at a time, to a Google Form using Playwright browser automation. The Python code:
 
 - accepts **short codes** (2–3 characters) in the CSV for any answer that has a fixed set of values,
 - expands those codes into the form's full answer text before sending,
 - validates every row against a fixed schema before any network call,
 - logs every submission attempt locally so the work is auditable and resumable,
-- handles auth via the user's existing `gcloud` CLI session — no Google Cloud project required for MVP1.
+- handles auth via a persistent browser profile — the user logs into Google once, and the session is reused.
 
 ## What data is collected
 
@@ -39,7 +39,7 @@ The exact fields and their values are defined in the [Architecture document](./a
 
 - A hand-curated CSV (one row per observation) is read by the system.
 - Each row is validated against the schema defined in [Architecture](./architecture.md#csv-schema-and-translation-table).
-- Each validated row is POSTed to a Google Apps Script `doPost` webhook, which constructs a Google Form response and submits it.
+- Each validated row is filled into the Google Form in a real Chromium browser (via Playwright), which submits it through the form's authenticated path.
 - A local JSON-Lines log file records every submission attempt.
 - The work is resumable: re-running a submission skips rows that have already been logged as successful.
 
