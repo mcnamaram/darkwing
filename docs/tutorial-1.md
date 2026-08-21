@@ -44,17 +44,25 @@ Expected output: a summary showing 2 records would be submitted. No browser open
 .venv/bin/darkwing submit ~/Desktop/test_observations.csv
 ```
 
-A Chromium browser opens, navigates to the form, and fills it out automatically.
+A Chromium browser opens, navigates to the form, and fills and submits it automatically.
 
 Expected output:
 
 ```sh
-success: 3 06/16/2026 07:00
-success: 3 06/16/2026 07:20
-...
+Submitting 2 record(s) to the form...
+✓ 2/2 record(s) submitted.
 ```
 
-A `submitted_log.jsonl` file records each attempt.
+Every attempt is appended to `submitted_log.jsonl` in the working directory.
+
+If you re-run the same command, DarkWing skips rows already logged as successfully submitted:
+
+```sh
+Skipping 2 record(s) already submitted (per submitted_log.jsonl).
+All record(s) were already submitted. Nothing to do.
+```
+
+Use `--no-resume` to submit all rows again regardless of the log.
 
 ## 5. Verify
 

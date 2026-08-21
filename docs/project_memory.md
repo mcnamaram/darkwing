@@ -22,7 +22,7 @@
 
 **Legend:** ⬜ not started · ✅ done · 🟡 in progress · 🟠 blocked
 
-**Test coverage:** 84 tests, all green. See [Test Strategy](./test_strategy.md).
+**Test coverage:** 95 tests, all green. See [Test Strategy](./test_strategy.md).
 
 ---
 
@@ -36,7 +36,7 @@
 | 92 tests | 84 tests (removed auth tests) |
 | `auth.py` module | Removed |
 | `playwright-stealth` | Removed (not needed) |
-| `pytest-playwright-asyncio` | Removed (conflicts with `pytest-playwright`) |
+| `pytest-playwright` | `pytest-playwright-asyncio` (async variant) |
 
 ---
 
@@ -50,6 +50,7 @@ src/darkwing/
 ├── form_submit.py   # Playwright browser automation
 ├── schema.py        # Pydantic models, short-code tables
 └── tests/
+    ├── conftest.py
     ├── test_cli.py
     ├── test_csv_io.py
     ├── test_form_submit.py
@@ -72,6 +73,8 @@ docs/
 
 ## What's next
 
-- **MVP2**: Video download epic — add ability to download and process video clips
-- **MVP3**: Review UI — web interface to review submissions before they go out
-- **MVP4**: Scheduled runs — cron job to submit daily CSV batches
+Epics are numbered as defined in [Project Requirements](./prd.md):
+
+- **MVP2**: Video download epic — download footage from the Reolink cameras for review
+- **MVP3**: Automated detection of adult swifts in video
+- **MVP4**: Review UI — web interface to review submissions before they go out

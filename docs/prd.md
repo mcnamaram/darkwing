@@ -38,7 +38,7 @@ The exact fields and their values are defined in the [Architecture document](./a
 ## What is in scope for MVP1
 
 - A hand-curated CSV (one row per observation) is read by the system.
-- Each row is validated against the schema defined in [Architecture](./architecture.md#csv-schema-and-translation-table).
+- Each row is validated against the schema defined in [Architecture](./architecture.md).
 - Each validated row is filled into the Google Form in a real Chromium browser (via Playwright), which submits it through the form's authenticated path.
 - A local JSON-Lines log file records every submission attempt.
 - The work is resumable: re-running a submission skips rows that have already been logged as successful.
@@ -57,7 +57,7 @@ The system is considered done when, given a CSV of valid rows, an authenticated 
 1. Run one command and have every valid row appear in the form's responses sheet.
 2. Re-run the same command after a partial failure and have only the previously-uncaught rows submitted.
 3. See a clear error (and no network call) for any row that fails validation.
-4. See a clear error and a partial-batch state if the auth token expires mid-batch.
+4. See a clear error and a partial-batch state if the browser session or Google login expires mid-batch.
 5. Have no row of the CSV persisted to a remote system that the form did not accept.
 
 ## Acknowledgements

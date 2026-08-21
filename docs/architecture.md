@@ -19,22 +19,24 @@ No apps, no webhooks, no API keys. The browser does the work.
 | Component | File | Role |
 | --- | --- | --- |
 | Schema | `src/darkwing/schema.py` | Pydantic models + short-code translation tables |
-| CSV I/O | `src/darkwing/csv_io.py` | Read CSV, write `submitted_log.jsonl` |
+| CSV I/O | `src/darkwing/csv_io.py` | Read CSV, read/write `submitted_log.jsonl`, resume keys |
 | Form Submit | `src/darkwing/form_submit.py` | Playwright browser automation |
 | CLI | `src/darkwing/cli.py` | `darkwing validate/submit` entry point |
 
 ## Data flow
 
 ```sh
-CSV file → read_csv() → [ObservationRecord] → submit_csv_records()
-                                              ├─ dry-run? → skip browser
+CSV file → read_csv() → [ObservationRecord] → cmd_submit() (cli.py)
+                                              ├─ resume filter (load_completed_keys vs submitted_log.jsonl)
+                                              ├─ dry-run? → skip browser, no log
                                               └─ launch Chromium (persistent context, google_profile/)
                                                  → goto form URL
-                                                 → for each record:
+                                                 → for each pending record:
                                                      → expand short codes
                                                      → fill fields by role/name
-                                                     → [submit button commented out]
+                                                     → click Submit
                                                      → Clear form
+                                                 → write_submission_log(results)
 ```
 
 ## Browser session (form_submit.py)
@@ -76,8 +78,10 @@ Playwright drives the real form UI directly — the same way a human would, tole
 ## Design decisions
 
 - **One browser session per run.** The persistent context is loaded once, reused for all records, closed at the end.
-- **Dry-run is pure.** No browser launched when `dry_run=True`.
-- **Errors are captured per-record.** A failing record returns `{"status": "error", "error": msg}` and the loop continues.
+- **Dry-run is pure.** No browser launched and nothing written to the log when `dry_run=True`.
+- **Errors are captured per-record.** A failing record returns `{"status": "error", "error": msg}` and the loop continues. The CLI exits non-zero if any record failed.
+- **Every attempt is logged.** `cmd_submit` appends one JSONL line per record to `submitted_log.jsonl`: `{record, status, error, timestamp}`.
+- **Resume is on by default.** Rows whose (tower, date, time-of-day) key appears in the log with `status: "success"` are skipped; failed rows are retried. `--no-resume` disables the filter.
 - **`slow_mo=500`** makes the browser act human-likely (pauses between actions).
 - **No auth module needed.** The browser handles Google login via the persistent profile.
 
@@ -92,4 +96,4 @@ Playwright drives the real form UI directly — the same way a human would, tole
 
 **Q: Do I need Google API credentials?** No. The browser profile holds the Google session.
 
-**Q: What if a record fails?** The error is recorded in the results list; the run continues. Nothing is retried automatically yet.
+**Q: What if a record fails?** The error is recorded in the results list and in `submitted_log.jsonl`; the run continues. Re-running retries only the failed rows (resume skips rows already logged as successful).

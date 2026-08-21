@@ -87,14 +87,23 @@ Useful helpers:
 ## `darkwing/csv_io`
 
 ```python
-from darkwing.csv_io import read_csv, write_submission_log
+from darkwing.csv_io import (
+    read_csv,
+    write_submission_log,
+    get_submission_log,
+    load_completed_keys,
+)
 
-records = read_csv(Path("observations.csv"))      # -> list[ObservationRecord]
-write_submission_log(records, results)            # -> appends JSONL
+records = read_csv(Path("observations.csv"))       # -> list[ObservationRecord]
+write_submission_log(results, log_path)            # -> appends JSONL
+entries = get_submission_log(log_path)             # -> list[dict]
+done_keys = load_completed_keys(log_path)          # -> set[str] of submitted keys
 ```
 
 - `read_csv(path)` — parses CSV, validates each row, returns records. Raises on bad rows.
-- `write_submission_log(records, results, log_path=...)` — appends one JSON line per record: `{record, status, error, timestamp}`.
+- `write_submission_log(results, log_path=...)` — appends one JSON line per result: `{record, status, error, timestamp}`. Takes the results list returned by `submit_csv_records()`.
+- `get_submission_log(log_path)` — reads the log back into a list of dicts.
+- `load_completed_keys(log_path)` — identity keys (`tower|date|time_of_day`) of records logged as `"success"`. Malformed lines are ignored. Used by the CLI's resume filter.
 
 ---
 
@@ -145,11 +154,13 @@ Low-level: fill one record into an already-open page. Returns `True` on success.
 ## `darkwing/cli`
 
 ```sh
-darkwing validate <csv> [--dry-run]
-darkwing submit   <csv> [--dry-run]
+darkwing validate <csv>
+darkwing submit   <csv> [--dry-run] [--no-resume]
 ```
 
 | Command | Exit codes |
 | --- | --- |
 | `validate` | 0 = valid, 1 = errors |
-| `submit` | 0 = all records ok, 1 = fatal |
+| `submit` | 0 = all records ok (or nothing left after resume), 1 = any record failed or fatal error |
+
+`submit` appends every attempt to `submitted_log.jsonl` in the working directory and skips already-submitted rows by default (`--no-resume` to disable).

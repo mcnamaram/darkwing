@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List
 
@@ -57,19 +58,48 @@ def read_csv_iter(path: Path) -> Iterator[ObservationRecord]:
         yield rec
 
 
+def _submission_key(rec: ObservationRecord) -> str:
+    """Stable identity key for a record: tower|date|time-of-day."""
+    return f"{rec.tower}|{rec.date_str}|{rec.time_of_day}"
+
+
+def load_completed_keys(log_path: Path) -> set[str]:
+    """Return identity keys of records successfully submitted per the log."""
+    keys: set[str] = set()
+    for entry in get_submission_log(log_path):
+        if entry.get("status") != "success":
+            continue
+        rec = entry.get("record", {})
+        try:
+            parsed = ObservationRecord.model_validate(rec)
+        except Exception:
+            continue  # malformed log line — treat as not-submitted
+        keys.add(_submission_key(parsed))
+    return keys
+
+
 def write_submission_log(
-    records: Iterable[ObservationRecord],
+    results: Iterable[Dict],
     log_path: Path,
 ) -> None:
-    """Append submitted records to a JSON-Lines log file.
+    """Append submission results to a JSON-Lines log file.
 
-    Each line is a JSON object representing one ``ObservationRecord``.
+    Each result is a dict ``{'record': ObservationRecord, 'status': str,
+    'error': str | None}`` as returned by ``submit_csv_records()``.
+    Each line written is
+    ``{'record': ..., 'status': ..., 'error': ..., 'timestamp': iso8601}``.
     Creates the file if it doesn't exist; appends if it does.
     """
     log_path = Path(log_path)
     with log_path.open("a", encoding="utf-8") as f:
-        for rec in records:
-            f.write(rec.model_dump_json() + "\n")
+        for result in results:
+            entry = {
+                "record": json.loads(result["record"].model_dump_json()),
+                "status": result["status"],
+                "error": result.get("error"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            f.write(json.dumps(entry) + "\n")
 
 
 def get_submission_log(log_path: Path) -> List[Dict]:

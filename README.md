@@ -45,8 +45,11 @@ darkwing {validate,submit} path/to/file.csv [--dry-run]
 | Command | What it does |
 | --- | --- |
 | `validate <csv>` | Reads and validates every row against the Pydantic schema. Prints summary. Exit 0 = clean, 1 = errors. |
-| `submit <csv> --dry-run` | Validates, expands short codes, prints what *would* be submitted. No browser launched. |
-| `submit <csv>` | Validates, expands short codes, opens browser, fills Google Form for each row. |
+| `submit <csv> --dry-run` | Validates, expands short codes, prints what *would* be submitted. No browser launched, no log written. |
+| `submit <csv>` | Validates, expands short codes, opens browser, fills Google Form for each row. Appends every attempt to `submitted_log.jsonl`. |
+| `submit <csv> --no-resume` | Same, but skips the resume check and submits all rows even if already logged as submitted. |
+
+**Resume:** by default, `submit` reads `submitted_log.jsonl` and skips rows already recorded as successfully submitted (matched by tower + date + time-of-day). Failed rows are retried on the next run. A run with any failed record exits non-zero.
 
 ## CSV Format
 
@@ -89,7 +92,7 @@ See [docs/architecture.md](docs/architecture.md) for component details.
 .venv/bin/pytest tests/
 ```
 
-84 tests covering schema validation, CSV I/O, CLI, and form submission.
+95 tests covering schema validation, CSV I/O, submission logging/resume, CLI, and form submission.
 
 ## License
 

@@ -23,7 +23,7 @@ Verify the install:
 .venv/bin/pytest --collect-only
 ```
 
-The second command should report 84 tests collected.
+The second command should report 95 tests collected.
 
 ## 2. Install Playwright browsers
 
