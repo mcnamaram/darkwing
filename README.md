@@ -34,66 +34,18 @@ darkwing submit observations.csv --dry-run
 darkwing submit observations.csv
 ```
 
-See [docs/setup.md](docs/setup.md) for full setup. See [docs/tutorial-1.md](docs/tutorial-1.md) for an end-to-end walkthrough.
-
 ## CLI
 
 ```sh
-darkwing {validate,submit} path/to/file.csv [--dry-run]
+darkwing {validate,submit,detect} path/to/file.csv [options]
 ```
+
+### Commands
 
 | Command | What it does |
 | --- | --- |
 | `validate <csv>` | Reads and validates every row against the Pydantic schema. Prints summary. Exit 0 = clean, 1 = errors. |
-| `submit <csv> --dry-run` | Validates, expands short codes, prints what *would* be submitted. No browser launched, no log written. |
-| `submit <csv>` | Validates, expands short codes, opens browser, fills Google Form for each row. Appends every attempt to `submitted_log.jsonl`. |
-| `submit <csv> --no-resume` | Same, but skips the resume check and submits all rows even if already logged as submitted. |
+| `submit <csv> [--dry-run]` | Validates, expands short codes, prints what *would* be submitted. With `--dry-run` no browser launched, no log written. Without `--dry-run` opens browser, fills Google Form for each row. Appends every attempt to `submitted_log.jsonl`. |
+| `detect <options>` | Run detection over local footage and emit a review index (JSONL). Offline-first: reads from local mp4 via `--source-path`. Produces a window-level verdict (SKIP, REVIEW, MANUAL) for each observation window. See `darkwing detect --help` for details. |
 
-**Resume:** by default, `submit` reads `submitted_log.jsonl` and skips rows already recorded as successfully submitted (matched by tower + date + time-of-day). Failed rows are retried on the next run. A run with any failed record exits non-zero.
-
-## CSV Format
-
-One row per 20-minute observation window:
-
-```csv
-tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
-3,6/15/2026,6,0,2,no,na,in;chg,1,y,1 north, 1 west
-3,6/15/2026,6,20,0,no,na,non,0,nap,
-```
-
-**Short codes used:**
-
-| Column | Codes | Meaning |
-| --- | --- | --- |
-| `nesting_stage` | `no`, `bld`, `egg`, `nst`, `fld` | No nest / Nest building / Egg(s) / Nestling(s) / Post-fledgling |
-| `bill_use` | `na`, `mat`, `fd`, `egg`, `nst`, `ps`, `po`, `oth` | N/A / Material / Feeding / Egg tending / Nestling tending / Self-preening / Other-preening / Other |
-| `flights` | `in`, `out`, `chg`, `non` | Flew in / Flew out / Changed position / None |
-| `awake` | `y`, `n`, `mbe`, `nap` | Yes / No / Maybe / No adults present |
-
-Semicolon-delimited for multi-select fields (e.g., `in;chg`).
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and set:
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| `DARKWING_FORM_URL` | Yes | Full URL of the Google Form |
-| `DARKWING_SUBMITTER_NAME` | Yes | Name to fill in the "Name" field |
-| `DARKWING_HEADLESS` | No | `true` (default) or `false` for visible browser |
-
-## Architecture
-
-See [docs/architecture.md](docs/architecture.md) for component details.
-
-## Testing
-
-```bash
-.venv/bin/pytest tests/
-```
-
-95 tests covering schema validation, CSV I/O, submission logging/resume, CLI, and form submission.
-
-## License
-
-MIT
+See [docs/setup.md](docs/setup.md) for full setup. See [docs/tutorial-1.md](docs/tutorial-1.md) for an end-to-end walkthrough.

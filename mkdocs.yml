@@ -29,6 +29,7 @@ nav:
     - Project Memory: project_memory.md
     - System Deep Dives:
       - Architecture: architecture.md
+      - Detector Algorithm: detector_algorithm.md
       - Project Requirements: prd.md
       - API Reference: api_reference.md
       - Secrets Handling: secrets_handling.md

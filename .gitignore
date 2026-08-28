@@ -55,7 +55,9 @@ __pycache__/
 *token*
 *cookie*
 !secrets_handling.md
-obs.csvnode_modules/
+obs.csv
+node_modules/
 .hermes/cache/
 google_profile/
-obs.*
+obs-*.*
+obs.numbers
