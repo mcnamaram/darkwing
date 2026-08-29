@@ -1,6 +1,7 @@
 """Tests for MVP3 Phase 2 VLM agent client (agent.py)."""
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest import mock
 
@@ -40,7 +41,7 @@ def test_propose_validates_schema(monkeypatch):
     resp = {"candidates": [{"content": {"parts": [{"text": json.dumps(vlm_json)}]}}]}
     with mock.patch.object(AIObservationAgent, "_post", return_value=resp) as m:
         a = AIObservationAgent()
-        rec = a.propose_observation(_fake_frames(), {"window_id": "T1_..."})
+        rec = asyncio.run(a.propose_observation(_fake_frames(), {"window_id": "T1_..."}))
         assert isinstance(rec, ObservationRecord)
         assert rec.tower == 1 and rec.num_adults == 2
         # provider gemini -> endpoint + key appended, schema sent
@@ -61,7 +62,7 @@ def test_propose_openai_format(monkeypatch):
     resp = {"choices": [{"message": {"content": json.dumps(vlm_json)}}]}
     with mock.patch.object(AIObservationAgent, "_post", return_value=resp) as m:
         a = AIObservationAgent()
-        rec = a.propose_observation(_fake_frames(3), {})
+        rec = asyncio.run(a.propose_observation(_fake_frames(3), {}))
         assert rec.tower == 2
         sent = m.call_args.args[1]
         assert sent["model"] == "gpt-4o-mini"
