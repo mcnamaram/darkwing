@@ -20,10 +20,17 @@ No apps, no webhooks, no API keys. The browser does the work.
 | --- | --- | --- |
 | Schema | `src/darkwing/schema.py` | Pydantic models + short-code translation tables |
 | CSV I/O | `src/darkwing/csv_io.py` | Read CSV, read/write `submitted_log.jsonl`, resume keys |
+| Detector | `src/darkwing/detector.py` | MOG2 bg-sub motion detection, 3-bucket window classification |
+| Frame Source | `src/darkwing/frames.py` | Video frame abstraction (`LocalVideoSource`, synthetic test source) |
+| Windows | `src/darkwing/windows.py` | Observation window grouping, JSONL state, resumability |
+| Agent Payload | `src/darkwing/agent_payload.py` | Extract 1-FPS JPEG keyframes from REVIEW windows (MVP3-1) |
+| VLM Agent | `src/darkwing/agent.py` | Lightweight REST client for Gemini/OpenAI (MVP3-2) |
 | Form Submit | `src/darkwing/form_submit.py` | Playwright browser automation |
-| CLI | `src/darkwing/cli.py` | `darkwing validate/submit` entry point |
+| CLI | `src/darkwing/cli.py` | `darkwing validate/submit/detect` entry point |
 
 ## Data flow
+
+### Submit path
 
 ```sh
 CSV file → read_csv() → [ObservationRecord] → cmd_submit() (cli.py)
@@ -37,6 +44,17 @@ CSV file → read_csv() → [ObservationRecord] → cmd_submit() (cli.py)
                                                      → click Submit
                                                      → Clear form
                                                  → write_submission_log(results)
+```
+
+### Detect path
+
+```sh
+Video file → LocalVideoSource → detector.process_frame() (MOG2)
+                                    ├─ per frame: FrameResult (blobs, ts_sec, ...)
+                                    └─ classify_window() → SKIP | REVIEW | MANUAL
+                                         └─ REVIEW: extract_motion_frames() → JPEG keyframes
+                                                      └─ AIObservationAgent.propose_observation() → ObservationRecord
+                                                           └─ append to review_index.jsonl
 ```
 
 ## Browser session (form_submit.py)

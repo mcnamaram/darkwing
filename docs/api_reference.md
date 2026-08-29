@@ -7,10 +7,15 @@
 ```sh
 darkwing/
 ├── __init__.py
-├── cli.py           # command-line entry points
-├── csv_io.py        # CSV and log I/O
-├── form_submit.py   # Playwright browser automation
-└── schema.py        # Pydantic models + translation tables
+├── agent.py             # VLM agent REST client (Gemini/OpenAI)
+├── agent_payload.py    # keyframe extraction for REVIEW windows
+├── cli.py              # command-line entry points
+├── csv_io.py           # CSV and log I/O
+├── detector.py         # MOG2 bg-sub motion detection
+├── frames.py           # video frame source abstraction
+├── windows.py          # observation window grouping & state
+├── form_submit.py      # Playwright browser automation
+└── schema.py           # Pydantic models + translation tables
 ```
 
 ---
@@ -81,6 +86,92 @@ Useful helpers:
 
 - `rec.time_of_day` — "06:00" formatted from hour+minutes
 - `rec.to_form_payload()` — dict of CSV codes (legacy; used by no current code)
+
+---
+
+## `darkwing/agent_payload`
+
+```python
+from darkwing.agent_payload import extract_motion_frames, DEFAULT_MAX_FRAMES, DEFAULT_TARGET_WIDTH
+```
+
+```python
+jpegs: list[bytes] = extract_motion_frames(
+    source_path=Path("clip.mp4"),
+    frame_results=[FrameResult(...)],   # from detector.process_frame()
+    fps=25.0,
+    first_detection_ts=12.0,             # or None to auto-detect
+    max_frames=15,
+    target_width=640,
+)
+```
+
+- Returns up to `max_frames` JPEG-encoded keyframes at 1 FPS covering the 60-second observation span starting at `first_detection_ts`.
+- Frames are downscaled to `target_width` wide, preserving aspect ratio.
+- Interval merging pads motion bursts by ±2s; contiguous/overlapping episodes merge into a single span.
+- If no motion is found, returns `[]`.
+
+---
+
+## `darkwing/agent`
+
+```python
+from darkwing.agent import AIObservationAgent
+
+agent = AIObservationAgent()   # reads GEMINI_API_KEY or OPENAI_API_KEY
+rec = agent.propose_observation(jpeg_frames: list[bytes], context_metadata: dict)
+```
+
+- `propose_observation` is `async` — call with `asyncio.run()` or from an async context.
+- Returns an `ObservationRecord` validated against the Pydantic schema.
+- Provider auto-selected from env: `GEMINI_API_KEY` → Gemini, `OPENAI_API_KEY` → OpenAI.
+- Gemini enforces JSON schema on response; OpenAI uses `response_format=json_schema`.
+
+---
+
+## `darkwing/detector`
+
+```python
+from darkwing.detector import process_frame, classify_window, WindowResult, FrameResult
+```
+
+```python
+# Per-frame
+result: FrameResult = process_frame(frame, frame_idx, fps, roi_mask)
+
+# Per-window (after processing all frames in a window)
+classification: WindowResult = classify_window(frame_results, window, glare_hours, version="v1")
+# classification.verdict in {"skip", "review", "manual"}
+```
+
+---
+
+## `darkwing/frames`
+
+```python
+from darkwing.frames import LocalVideoSource
+
+with LocalVideoSource(Path("clip.mp4")) as src:
+    for frame, idx, ts_sec in src:
+        ...
+```
+
+- `LocalVideoSource` wraps `cv2.VideoCapture`, auto-detects FPS, handles zero-duration clips.
+- All frame sources implement the same `__iter__` protocol for detector testing.
+
+---
+
+## `darkwing/windows`
+
+```python
+from darkwing.windows import build_windows, read_review_index, append_review_window
+```
+
+```python
+windows = build_windows(Path("clip.mp4"), fps, hours=[6, 7, 8])
+review_index = read_review_index(Path("review_index.jsonl"))
+append_review_window(Path("review_index.jsonl"), window, window_result)
+```
 
 ---
 
