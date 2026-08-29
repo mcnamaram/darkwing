@@ -8,7 +8,7 @@
 - **Dry-run flows** are tested without ever launching Chromium.
 - **Browser automation** is tested by mocking `load_form` and `submit_observation`; real browser runs happen manually (`DARKWING_HEADLESS=false`) during smoke testing.
 
-## What's covered (95 tests)
+## What's covered (125 tests)
 
 | Area | File | What's tested |
 | --- | --- | --- |
@@ -17,6 +17,10 @@
 | Submission log & resume | `tests/test_csv_io.py` | Log write/read shape (`{record, status, error, timestamp}`), append behavior, resume-key extraction (success-only, malformed-line tolerance, key stability) |
 | Form submit | `tests/test_form_submit.py` | `dry_run` short-circuits (never launches browser), per-record error capture, multiple records |
 | CLI | `tests/test_cli.py` | `validate` exit codes, `submit --dry-run` output and no-log guarantee, log writing on real submit, resume skipping/retrying, `--no-resume`, partial-failure exit code |
+| Agent Payload Extraction | `tests/test_agent_payload.py` | Interval merging, downsampling, aspect ratio preservation, edge cases |
+| VLM Agent Client | `tests/test_agent.py` | REST client logic, schema validation, provider selection, async proposal |
+| CLI Detection Integration | `tests/test_cli_detect.py` | End-to-end detect flow with mocked agent, async bridge, review window handling |
+| Windowing & State | `tests/test_windows.py` | Window grouping, resumability, JSONL log integrity |
 
 ## What's NOT covered
 
