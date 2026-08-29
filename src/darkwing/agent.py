@@ -75,14 +75,20 @@ class AIObservationAgent:
         self.api_key = key
         self.provider = provider or ("gemini" if os.environ.get("GEMINI_API_KEY") else "openai")
 
-    def _post(self, url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+    async def _post(self, url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+        # Using run_in_executor to make sync urllib call awaitable
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._sync_post, url, payload, headers)
+
+    def _sync_post(self, url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
         req = urllib.request.Request(
             url, data=json.dumps(payload).encode(), headers=headers, method="POST"
         )
         with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 ( trusted URL )
             return json.loads(r.read().decode())
 
-    def propose_observation(
+    async def propose_observation(
         self, frames: List[bytes], context_metadata: Dict[str, Any]
     ) -> ObservationRecord:
         schema = ObservationRecord.model_json_schema()
@@ -94,6 +100,6 @@ class AIObservationAgent:
             payload = _openai_payload(frames, context_metadata, schema)
             url = OPENAI_URL
             headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
-        resp = self._post(url, payload, headers)
+        resp = await self._post(url, payload, headers)
         text = _extract_text(resp, self.provider)
         return ObservationRecord(**json.loads(text))

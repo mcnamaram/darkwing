@@ -15,6 +15,8 @@ from darkwing.form_submit import submit_csv_records
 from darkwing import detector as det
 from darkwing import windows as win
 from darkwing.frames import open_source
+from darkwing import agent as ai_agent
+from darkwing import agent_payload
 import asyncio
 
 DEFAULT_LOG_PATH = Path("submitted_log.jsonl")
@@ -98,14 +100,20 @@ def cmd_submit(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_detect(args: argparse.Namespace) -> int:
+async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     """Run detection over local footage and emit a review index (JSONL).
 
     Offline-first: reads from local mp4 via --source-path. A camera/RTSP
     source (plan R1) plugs into the same open_source() factory later.
+
+    If ``--agent`` is set (and ``agent`` is provided or a key is configured),
+    REVIEW windows are sent to the VLM agent, which appends an
+    ``ai_observation`` proposal to the review index for human audit.
     """
     import json
     from pathlib import Path as _P
+
+    from darkwing.schema import ObservationRecord
 
     date = args.date
     tower = args.tower
@@ -113,6 +121,16 @@ def cmd_detect(args: argparse.Namespace) -> int:
     sample_every = args.sample_every
     out_dir = _P(args.out_dir) / date / f"tower{tower}"
     manifest = out_dir / "review_index.jsonl"
+
+    if args.agent and agent is None:
+        try:
+            agent = ai_agent.AIObservationAgent()
+        except ValueError as exc:
+            print(f"✗ --agent requested but no VLM key available: {exc}", file=sys.stderr)
+            return 1
+    
+    # Ensure agent is typed for awaitable member access
+    vlm_agent: ai_agent.AIObservationAgent = agent  # type: ignore
 
     # 1. enumerate windows, skip done (resume)
     hours = range(args.hours[0], args.hours[1] + 1) if args.hours else win.OBSERVATION_HOURS
@@ -165,6 +183,24 @@ def cmd_detect(args: argparse.Namespace) -> int:
             "detector_version": res.detector_version,
             "glare_reason": res.glare_reason,
         }
+        
+        # Phase 3: AI Agent Integration (REQ-7)
+        if args.agent and res.verdict is det.Verdict.REVIEW:
+            # 1. Payload Extraction (Phase 1)
+            frames_to_send = agent_payload.extract_motion_frames(src, frs)
+            if frames_to_send:
+                # 2. Agent Proposal (Phase 2)
+                # context_metadata maps to agent.propose_observation's context_metadata arg
+                ctx = {
+                    "tower": res.tower,
+                    "date": res.date,
+                    "hour": res.hour,
+                    "minute": res.minute,
+                    "detector_version": res.detector_version
+                }
+                proposal = await vlm_agent.propose_observation(frames_to_send, context_metadata=ctx)
+                rec["ai_observation"] = proposal.model_dump()
+        
         win.append_result(manifest, rec)
         if res.verdict is det.Verdict.SKIP:
             n_skip += 1
@@ -223,10 +259,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="Hours forced to MANUAL verdict (default 11 12 13)")
     p_det.add_argument("--out-dir", default="footage",
                        help="Output root for review_index.jsonl")
+    p_det.add_argument("--agent", action="store_true",
+                       help="Invoke the VLM agent on REVIEW windows to propose ObservationRecords")
     p_det.set_defaults(func=cmd_detect)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    result = args.func(args)
+    if hasattr(args, "func") and args.func.__name__ == "cmd_detect":
+        import asyncio
+        return asyncio.run(result)
+    return result
 
 
 if __name__ == "__main__":
