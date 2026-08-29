@@ -1,18 +1,31 @@
 # Project Requirements
 
-## Why this project exists
+## Vision
+The DarkWing research project automates chimney swift observation data ingestion from Reolink camera footage into Google Forms. It transitions from manual CSV data entry to a fully automated pipeline: motion detection → VLM frame analysis → structured form submission.
 
-The Wild Bird Recovery research program operates Reolink cameras pointed at Chimney Swift nesting towers. A researcher (or volunteer) needs to watch each day's footage and record structured observations at three points in every hour from 6:00 AM to 9:00 PM. Today, that work is done by hand against a Google Form, one response per observation, and the data is tedious to type: the form's questions are long-form, the response values are long-form, and there are 45 observations per day per tower. The form itself lives behind an organization that requires authenticated submission, which means a plain `curl` against the form's `formResponse` endpoint returns 404.
+## MVP Phases & Scope
+- **MVP1: Manual Submission (Complete)**
+    - Validate observation CSVs against Pydantic schema.
+    - Automated submission via Playwright to authenticated Google Forms.
+    - Resumable submission via `submitted_log.jsonl`.
+- **MVP2: Motion Detection (Complete)**
+    - Offline background-subtraction (MOG2) detector.
+    - Aggregation into 10-minute observation windows.
+    - Classification: `SKIP` (no motion), `REVIEW` (motion detected), `MANUAL` (high-glare/unreliable).
+- **MVP3: VLM Agent Integration (Complete)**
+    - VLM (Gemini/OpenAI) analysis of keyframes from `REVIEW` windows.
+    - Automated generation of `ObservationRecord` JSON from visual data.
 
-**What success looks like.** A researcher can produce a CSV (by hand, from a spreadsheet, or eventually from automated video detection) and submit all of its rows to the form, with the work checked in and resumable, with each row validated before it leaves the local machine, and without manually typing the form's long-form question text or long-form answer text on every row.
+## Business Rules
+1. **Data Integrity:** Every observation must be validated against the Pydantic schema (`src/darkwing/schema.py`) before persistence or submission.
+2. **Deterministic Resumability:** Any interrupted process must be restartable from the last successful record/window without duplicating work.
+3. **Transparency:** All automated actions (detection classification, agent-proposed observations, form submission) must be logged for auditability.
+4. **Human-in-the-Loop:** `MANUAL` detection windows MUST be flagged for manual review and never automatically processed by the VLM agent.
 
-## What we're solving
-
-1. **The form's question text is long and repetitive.** Manually transcribing each row is slow and error-prone.
-2. **The form's answer values are long and repetitive.** Each answer is a full sentence ("Yes, at least one adult flew into the chimney"). For a single day at a single tower, that's 45 rows × 5–6 form fields × a sentence per field — too many keystrokes for a volunteer workflow.
-3. **The form requires authenticated submission.** Direct POSTs to the form's public endpoint do not work; the user must go through an authenticated path.
-4. **Submission is currently one form-response at a time, in a browser.** There is no way to submit a batch.
-5. **There is no way to review before submitting.** Once a row is in the form's responses sheet, the only way to fix it is to edit the sheet directly.
+## Acceptance Criteria
+- **MVP1:** Submission command succeeds for valid CSV; logs successful submissions; skips already-submitted rows.
+- **MVP2:** Detector identifies empty windows; classifies windows accurately (SKIP/REVIEW/MANUAL); logs per-window classification.
+- **MVP3:** Agent successfully processes `REVIEW` windows; generates valid observation JSON; form submission succeeds for generated records.
 
 ## The approach
 

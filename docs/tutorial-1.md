@@ -68,6 +68,23 @@ Use `--no-resume` to submit all rows again regardless of the log.
 
 Check the Google Form responses sheet — you should see 2 new entries.
 
+## 6. Automated Detection (MVP2/MVP3)
+
+For an end-to-end pipeline (detect motion → VLM analysis → form submission):
+
+```bash
+# Detect motion and identify review windows
+.venv/bin/darkwing detect ~/Desktop/my_camera_footage.mp4
+```
+
+**What this does:**
+1. Processes the video with MOG2 background-subtraction.
+2. Groups frames into 10-minute observation windows.
+3. Classifies each window as `SKIP` (no motion), `REVIEW` (motion detected), or `MANUAL` (high-glare/unreliable).
+4. Writes results to `review_index.jsonl`.
+
+For an end-to-end pipeline (detect + VLM analysis + form submission), see [Tutorial 2: Automated Pipeline](./tutorial-2.md).
+
 ## Troubleshooting
 
 - **Browser doesn't open**: Ensure `DARKWING_FORM_URL` is set correctly in `.env`.
