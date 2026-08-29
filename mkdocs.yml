@@ -30,8 +30,8 @@ nav:
     - System Deep Dives:
       - Architecture: architecture.md
       - Detector Algorithm: detector_algorithm.md
-      - AI Integration Plan: canonical-ai-agent-integration.md
-      - Payload Extraction Spec: mvp3_phase1_spec.md
+      - AI Integration: ai_integration.md
+      - Payload Extraction Spec: payload_extraction_spec.md
       - Project Requirements: prd.md
       - API Reference: api_reference.md
       - Secrets Handling: secrets_handling.md
