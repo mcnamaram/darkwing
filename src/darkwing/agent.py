@@ -1,8 +1,8 @@
 """MVP3 Phase 2: VLM agent client for observation proposals.
 
 Lightweight stdlib (urllib) REST client — no SDK bloat (REQ-6). Talks to
-Gemini or OpenAI, sends downscaled keyframes + context, enforces the
-ObservationRecord JSON schema on the response, returns a validated record.
+Gemini, sends downscaled keyframes + context, enforces the ObservationRecord
+JSON schema on the response, returns a validated record.
 """
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 from darkwing.schema import ObservationRecord
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 SYSTEM_PROMPT = (
     "You are an expert ornithologist analyzing Chimney Swift nesting tower "
@@ -46,34 +45,19 @@ def _gemini_payload(frames: List[bytes], ctx: Dict[str, Any], schema: Dict[str, 
     }
 
 
-def _openai_payload(frames: List[bytes], ctx: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
-    content: List[Dict[str, Any]] = [
-        {"type": "text", "text": SYSTEM_PROMPT + f"\nWindow context: {json.dumps(ctx)}"}
-    ]
-    for b in _b64(frames):
-        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b}"}})
-    return {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": content}],
-        "response_format": {"type": "json_schema", "json_schema": {"name": "ObservationRecord", "schema": schema, "strict": True}},
-    }
-
-
-def _extract_text(resp: Dict[str, Any], provider: str) -> str:
-    if provider == "gemini":
-        return resp["candidates"][0]["content"]["parts"][0]["text"]
-    return resp["choices"][0]["message"]["content"]
+def _extract_text(resp: Dict[str, Any]) -> str:
+    return resp["candidates"][0]["content"]["parts"][0]["text"]
 
 
 class AIObservationAgent:
     """Thin VLM client: keyframes + context -> validated ObservationRecord."""
 
     def __init__(self, api_key: Optional[str] = None, provider: Optional[str] = None) -> None:
-        key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        key = api_key or os.environ.get("GEMINI_API_KEY")
         if not key:
-            raise ValueError("No VLM API key: set GEMINI_API_KEY or OPENAI_API_KEY.")
+            raise ValueError("No VLM API key: set GEMINI_API_KEY.")
         self.api_key = key
-        self.provider = provider or ("gemini" if os.environ.get("GEMINI_API_KEY") else "openai")
+        self.provider = provider or "gemini"
 
     async def _post(self, url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
         # Using run_in_executor to make sync urllib call awaitable
@@ -97,9 +81,7 @@ class AIObservationAgent:
             url = f"{GEMINI_URL}?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
         else:
-            payload = _openai_payload(frames, context_metadata, schema)
-            url = OPENAI_URL
-            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+            raise ValueError(f"Provider {self.provider} not supported.")
         resp = await self._post(url, payload, headers)
-        text = _extract_text(resp, self.provider)
+        text = _extract_text(resp)
         return ObservationRecord(**json.loads(text))

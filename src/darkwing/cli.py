@@ -53,17 +53,15 @@ def cmd_submit(args: argparse.Namespace) -> int:
 
     # Resume: skip records already logged as successfully submitted.
     log_path = DEFAULT_LOG_PATH
-    if args.dry_run:
+    if args.dry_run or not args.resume:
         pending = records
-    elif args.resume:
+    else:
         done = load_completed_keys(log_path)
         pending = [r for r in records
                    if f"{r.tower}|{r.date_str}|{r.time_of_day}" not in done]
         skipped = len(records) - len(pending)
         if skipped:
             print(f"Skipping {skipped} record(s) already submitted (per {log_path}).")
-    else:
-        pending = records
 
     if not pending:
         print("All record(s) were already submitted. Nothing to do.")
