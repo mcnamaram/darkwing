@@ -82,17 +82,22 @@ def write_submission_log(
     results: Iterable[Dict],
     log_path: Path,
 ) -> None:
-    """Append submission results to a JSON-Lines log file.
+    """Append ONLY successful submission results to a JSON-Lines log file.
 
     Each result is a dict ``{'record': ObservationRecord, 'status': str,
     'error': str | None}`` as returned by ``submit_csv_records()``.
+    Only entries with status == 'success' are written.
     Each line written is
-    ``{'record': ..., 'status': ..., 'error': ..., 'timestamp': iso8601}``.
+    ``{'record': ..., 'status': 'success', 'error': None, 'timestamp': iso8601}``.
     Creates the file if it doesn't exist; appends if it does.
     """
     log_path = Path(log_path)
+    # Only open/create the file if there's at least one success to write
+    success_results = [r for r in results if r.get("status") == "success"]
+    if not success_results:
+        return
     with log_path.open("a", encoding="utf-8") as f:
-        for result in results:
+        for result in success_results:
             entry = {
                 "record": json.loads(result["record"].model_dump_json()),
                 "status": result["status"],

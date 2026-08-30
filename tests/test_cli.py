@@ -168,9 +168,8 @@ def test_submit_resume_retries_failed_records(sample_csv, mock_env,
                     rc = main(["submit", str(sample_csv)])
     assert rc == 1  # partial failure now exits non-zero
     log_path = tmp_path / "submitted_log.jsonl"
-    entries = [json.loads(line)
-               for line in log_path.read_text().splitlines()]
-    assert all(e["status"] == "error" for e in entries)
+    # No log file should be created because no records succeeded
+    assert not log_path.exists()
 
     # Second run: browser succeeds; all 4 rows retried.
     with _patch_browser_success():

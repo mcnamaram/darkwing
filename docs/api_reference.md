@@ -192,7 +192,7 @@ done_keys = load_completed_keys(log_path)          # -> set[str] of submitted ke
 ```
 
 - `read_csv(path)` — parses CSV, validates each row, returns records. Raises on bad rows.
-- `write_submission_log(results, log_path=...)` — appends one JSON line per result: `{record, status, error, timestamp}`. Takes the results list returned by `submit_csv_records()`.
+- `write_submission_log(results, log_path=...)` — appends ONE JSON line per SUCCESSFUL result only (`status == 'success'`). Failed/error results are silently skipped. Takes the results list returned by `submit_csv_records()`. Creates the file if it doesn't exist; appends if it does. Does nothing if no successful records are present.
 - `get_submission_log(log_path)` — reads the log back into a list of dicts.
 - `load_completed_keys(log_path)` — identity keys (`tower|date|time_of_day`) of records logged as `"success"`. Malformed lines are ignored. Used by the CLI's resume filter.
 

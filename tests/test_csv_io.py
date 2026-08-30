@@ -140,19 +140,21 @@ def test_write_and_read_submission_log(tmp_path: Path, valid_records: list):
         assert "tower" in obj["record"]
 
 
-def test_write_logs_error_results(tmp_path: Path, valid_records: list):
-    """Failed records are logged too, with their error message."""
+def test_write_does_not_log_error_results(tmp_path: Path, valid_records: list):
+    """Error results are silently skipped; only successes reach the log."""
     log_path = tmp_path / "log.jsonl"
     results = [
         _result(valid_records[0], "success"),
         _result(valid_records[1], "error", "Submission failed"),
     ]
     write_submission_log(results, log_path)
-    entries = [json.loads(line)
-               for line in log_path.read_text().splitlines()]
-    assert entries[1]["status"] == "error"
-    assert entries[1]["error"] == "Submission failed"
-    assert entries[1]["timestamp"]
+    entries = [json.loads(line) for line in log_path.read_text().splitlines()]
+    # Only the success record should be in the log
+    assert len(entries) == 1
+    assert entries[0]["status"] == "success"
+    # No error entry should appear anywhere in the log
+    for entry in entries:
+        assert entry["status"] != "error"
 
 
 def test_get_submission_log_empty(tmp_path: Path):
