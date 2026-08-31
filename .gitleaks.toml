@@ -1,0 +1,29 @@
+# Gitleaks configuration for DarkWing
+# See https://github.com/gitleaks/gitleaks/blob/main/config/gitleaks.toml
+
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[allowlist]
+# Allowlist specific paths or patterns if needed
+# paths = [
+#   "*.md",
+#   "docs/**",
+# ]
+
+# Allowlist specific commits if needed (e.g. historical secrets)
+# commits = [
+#   "abc123def456",
+# ]
+
+# Allowlist regex patterns (e.g. test fixtures with dummy secrets)
+# regexes = [
+#   '''(?i)test.*password.*=.*["']test["']''',
+#   '''(?i)fake.*key.*=.*["']fake["']''',
+# ]
+
+# Allowlist specific rules by ID
+# rules = [
+#   "generic-api-key",
+# ]
