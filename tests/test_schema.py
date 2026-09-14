@@ -584,3 +584,101 @@ def test_parse_observation_row(valid_row_dict):
     r = parse_observation_row(valid_row_dict)
     assert isinstance(r, ObservationRecord)
     assert r.hour == 6
+
+# ── Mutant-killing tests for schema.py ────────────────────────────────────────
+# Entries 45-48: schema.py:73-80, 98, 116, 135 - numeric replacement and comparison bugs
+
+# Entry 45: schema.py:73-80 - numeric replacement in ObservationRecord and preprocess_num_fields
+def test_schema_no_numeric_replacement_bug():
+    """Mutant: numeric replacement — num_adults/num_near_nest validation should use correct logic."""
+    from darkwing.schema import ObservationRecord
+    
+    # Test that num_adults validation works correctly
+    # The mutant would replace correct numeric logic with erroneous replacement
+    r = ObservationRecord.model_validate({
+        "tower": "1", "date_str": "6/15/2026", "hour": "6",
+        "minutes_past_hour": "0", "num_adults": "5",
+        "nesting_stage": "no", "bill_use": ["na"],
+        "flights": ["non"], "num_near_nest": "0", "awake": "y", "notes": None
+    })
+    assert r.num_adults == 5, f"Expected num_adults=5, got {r.num_adults}"
+    
+    # Test with string input that should be converted
+    r2 = ObservationRecord.model_validate({
+        "tower": "1", "date_str": "6/15/2026", "hour": "6",
+        "minutes_past_hour": "0", "num_adults": "15",
+        "nesting_stage": "no", "bill_use": ["na"],
+        "flights": ["non"], "num_near_nest": "0", "awake": "y", "notes": None
+    })
+    # num_adults > 10 should set num_adults_other
+    assert r2.num_adults == -2, f"Expected num_adults=-2 for value > 10, got {r2.num_adults}"
+    assert r2.num_adults_other == "15", f"Expected num_adults_other='15', got {r2.num_adults_other}"
+
+# Entry 46: schema.py:98 - numeric replacement in preprocess_num_fields
+def test_schema_preprocess_num_fields_correct():
+    """Mutant: numeric replacement in preprocess_num_fields — field preprocessing should be correct."""
+    from darkwing.schema import ObservationRecord
+    
+    # Test num_near_nest with "na" input
+    r = ObservationRecord.model_validate({
+        "tower": "1", "date_str": "6/15/2026", "hour": "6",
+        "minutes_past_hour": "0", "num_adults": "0",
+        "nesting_stage": "no", "bill_use": ["na"],
+        "flights": ["non"], "num_near_nest": "na", "awake": "y", "notes": None
+    })
+    # "na" should set num_near_nest=0 and num_near_nest_other="N/A or Zero"
+    assert r.num_near_nest == 0, f"Expected num_near_nest=0 for 'na', got {r.num_near_nest}"
+    assert r.num_near_nest_other == "N/A or Zero", \
+        f"Expected num_near_nest_other='N/A or Zero', got {r.num_near_nest_other}"
+
+# Entry 47: schema.py:116 - numeric replacement in preprocess_num_fields
+def test_schema_preprocess_num_fields_text_other():
+    """Mutant: numeric replacement — text handling for num_near_nest should be correct."""
+    from darkwing.schema import ObservationRecord
+    
+    # Test num_near_nest with text "too many"
+    r = ObservationRecord.model_validate({
+        "tower": "1", "date_str": "6/15/2026", "hour": "6",
+        "minutes_past_hour": "0", "num_adults": "0",
+        "nesting_stage": "no", "bill_use": ["na"],
+        "flights": ["non"], "num_near_nest": "too many", "awake": "y", "notes": None
+    })
+    # Text should set num_near_nest=0 and num_near_nest_other="too many"
+    assert r.num_near_nest == 0, f"Expected num_near_nest=0 for text, got {r.num_near_nest}"
+    assert r.num_near_nest_other == "too many", \
+        f"Expected num_near_nest_other='too many', got {r.num_near_nest_other}"
+
+# Entry 48: schema.py:135 - incorrect comparison in parse_date_str
+def test_schema_parse_date_str_correct_comparison():
+    """Mutant: incorrect comparison in parse_date_str — date validation should use correct operators."""
+    from darkwing.schema import ObservationRecord
+    
+    # Test valid date formats
+    r = ObservationRecord.model_validate({
+        "tower": "1", "date_str": "12/05/2026", "hour": "18",
+        "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
+        "flights": "non", "num_near_nest": "0", "awake": "y", "notes": None
+    })
+    assert r.date_str == "12/05/2026", f"Expected normalized date, got {r.date_str}"
+    
+    # Test invalid month
+    try:
+        ObservationRecord.model_validate({
+            "tower": "1", "date_str": "13/01/2026", "hour": "6",
+            "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
+            "flights": "non", "num_near_nest": "0", "awake": "y", "notes": None
+        })
+        assert False, "Should have raised ValueError for invalid month"
+    except ValueError as e:
+        assert "date_str" in str(e), f"Expected date_str error, got: {e}"
+
+    # Test invalid day
+    try:
+        ObservationRecord.model_validate({
+            "tower": "1", "date_str": "06/31/2026", "hour": "6",
+            "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
+            "flights": "non", "num_near_nest": "0", "awake": "y", "notes": None
+        })
+        assert False, "Should have raised ValueError for invalid day"
+    except ValueError as e:
+        assert "date_str" in str(e), f"Expected date_str error, got: {e}"

@@ -214,3 +214,45 @@ def test_resume_key_is_stable_across_serialization(
     keys = load_completed_keys(log_path)
     for rec in valid_records:
         assert _submission_key(rec) in keys
+
+# ── Mutant-killing test for csv_io.py ────────────────────────────────────────
+# Entry 37: csv_io.py:70 - incorrect inequality operator when filtering completed keys
+# The load_completed_keys function uses "is" for string comparison; test correct behavior
+def test_load_completed_keys_uses_equality_not_identity():
+    """Mutant: inequality operator — should use == or != not is/is not for string compare."""
+    from darkwing.csv_io import load_completed_keys, write_submission_log
+    from darkwing.csv_io import _submission_key
+    from pathlib import Path
+    import json
+    import tempfile
+
+    # Create a submission log with both success and error entries
+    log_path = Path(tempfile.mkstemp(suffix='.jsonl')[1])
+
+    # Write success entry
+    success_rec = {"tower": "3", "date_str": "6/15/2026", "time_of_day": "06:00"}
+    success_entry = {"record": success_rec, "status": "success", "error": None,
+                     "timestamp": "2026-01-01T00:00:00+00:00"}
+    with log_path.open('w') as f:
+        f.write(json.dumps(success_entry) + '\n')
+
+    # Write error entry
+    error_rec = {"tower": "3", "date_str": "6/15/2026", "time_of_day": "06:20"}
+    error_entry = {"record": error_rec, "status": "error", "error": "test error",
+                   "timestamp": "2026-01-01T00:00:00+00:00"}
+    with log_path.open('a') as f:
+        f.write(json.dumps(error_entry) + '\n')
+
+    keys = load_completed_keys(log_path)
+    success_key = _submission_key(success_rec)  # "3|6/15/2026|06:00"
+    error_key = _submission_key(error_rec)      # "3|6/15/2026|06:20"
+
+    # With correct code: only success keys should be excluded (i.e., not in keys set)
+    # The error key should be in the set
+    assert error_key in keys, f"Error key {error_key} should be in completed keys set"
+    # Success key should NOT be in the set (it was "completed")
+    assert success_key not in keys, f"Success key {success_key} should not be in completed keys set"
+
+    # Mutant bug: using "is" instead of "==" for string comparison could fail
+    # because Python interns short strings but not guaranteed for all cases
+    assert error_key in keys
