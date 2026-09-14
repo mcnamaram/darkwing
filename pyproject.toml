@@ -17,7 +17,11 @@ dependencies = [
 dev = [
     "pytest>=9.1",
     "pytest-asyncio>=0.26.0",
-    "pytest-playwright-asyncio>=0.9.0",
+    "pytest-playwright>=0.9.0",
+    "coverage>=7.6",
+    "pytest-cov>=6.0",
+    "cosmic-ray>=8.7",
+    "cosmic-ray.plugins.pytest_runner>=8.7",
 ]
 
 [project.scripts]
@@ -25,3 +29,31 @@ darkwing = "darkwing.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.coverage.run]
+source = ["src/darkwing"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*_test.py",
+    "*/__init__.py",
+    "*/conftest.py",
+    "*/fixtures/*",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+skip_covered = false
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
