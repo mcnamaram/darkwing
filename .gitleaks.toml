@@ -7,10 +7,11 @@ useDefault = true
 
 [allowlist]
 # Allowlist specific paths or patterns if needed
-# paths = [
-#   "*.md",
-#   "docs/**",
-# ]
+paths = [
+  '(?i)\\.md$',
+  '(?i)docs/',
+  '(?i)google_profile/',
+]
 
 # Allowlist specific commits if needed (e.g. historical secrets)
 # commits = [

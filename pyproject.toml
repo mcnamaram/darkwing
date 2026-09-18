@@ -11,6 +11,8 @@ dependencies = [
     "pydantic>=2.13",
     "playwright>=1.40",
     "python-dotenv>=1.0.1",
+    "opencv-python>=4.10",
+    "numpy>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -21,7 +23,7 @@ dev = [
     "coverage>=7.6",
     "pytest-cov>=6.0",
     "cosmic-ray>=8.7",
-    "cosmic-ray.plugins.pytest_runner>=8.7",
+    "cosmic-ray-pytest>=1.0",
 ]
 
 [project.scripts]

@@ -78,6 +78,7 @@ For an end-to-end pipeline (detect motion → VLM analysis → form submission):
 ```
 
 **What this does:**
+
 1. Processes the video with MOG2 background-subtraction.
 2. Groups frames into 10-minute observation windows.
 3. Classifies each window as `SKIP` (no motion), `REVIEW` (motion detected), or `MANUAL` (high-glare/unreliable).

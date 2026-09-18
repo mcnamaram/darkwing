@@ -113,9 +113,9 @@ def test_roi_build_uses_multiplication_not_shift():
 # Test that classify_window produces correct verdicts
 def test_classify_window_verdict_types():
     """Mutant: numeric replacement in window result — verdict should be Verdict enum."""
-    from darkwing.detector import classify_window, Verdict, FrameResult
+    from darkwing.detector import classify_window, Verdict, FrameResult, Detector
     import numpy as np
-    d = __import__('darkwing.detector').Detector()
+    d = Detector()
     # Static scene -> SKIP
     frames = [d.process_frame(np.full((180, 320, 3), 60, np.uint8), i) for i in range(60)]
     from darkwing.windows import WindowId
@@ -178,20 +178,20 @@ def test_fg_frac_uses_subtraction_not_division():
 # Entry 36: numeric replacement in classification
 def test_classification_uses_correct_numeric():
     """Mutant: numeric replacement in classification — verdict should follow protocol."""
-    from darkwing.detector import classify_window, Verdict
+    from darkwing.detector import classify_window, Verdict, Detector
     import numpy as np
-    d = __import__('darkwing.detector').Detector()
+    import cv2
+    d = Detector()
     # Moving blob -> REVIEW
     frames = []
     for i in range(60):
         f = np.full((180, 320, 3), 60, np.uint8)
-        from darkwing.detector import cv2_circle
-        # Simulate a bird-sized blob at frame 30
         if i >= 30:
-            import cv2
-            cv2.circle(f, (100, 150), 9, 12, -1)  # area ~254px^2 > min_area 249
+            # Create a bird-sized blob (radius 20, area ~1256 px² > min_area 250)
+            cv2.circle(f, (100 + (i - 30) * 3, 150), 20, (0, 0, 0), -1)
         frames.append(d.process_frame(f, i))
-    w = __import__('darkwing.windows').WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
+    from darkwing.windows import WindowId
+    w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
     res = classify_window(frames, w, glare_hours=())
     # Should detect a bird -> REVIEW (not SKIP)
     assert res.verdict is not Verdict.SKIP, "Moving bird should not produce SKIP verdict"

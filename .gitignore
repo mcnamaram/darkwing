@@ -47,6 +47,13 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+cosmic-ray-session.json
+cosmic-ray-report.html
+cosmic-ray-badge.svg
+gitleaks-report.json
 
 # Sensitive data patterns - never commit
 # (any file matching these globs is rejected by pre-commit if added later)

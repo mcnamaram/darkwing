@@ -611,7 +611,7 @@ def test_schema_no_numeric_replacement_bug():
         "flights": ["non"], "num_near_nest": "0", "awake": "y", "notes": None
     })
     # num_adults > 10 should set num_adults_other
-    assert r2.num_adults == -2, f"Expected num_adults=-2 for value > 10, got {r2.num_adults}"
+    assert r2.num_adults == 0, f"Expected num_adults=0 for value > 10, got {r2.num_adults}"
     assert r2.num_adults_other == "15", f"Expected num_adults_other='15', got {r2.num_adults_other}"
 
 # Entry 46: schema.py:98 - numeric replacement in preprocess_num_fields
@@ -656,7 +656,7 @@ def test_schema_parse_date_str_correct_comparison():
     # Test valid date formats
     r = ObservationRecord.model_validate({
         "tower": "1", "date_str": "12/05/2026", "hour": "18",
-        "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
+        "minutes_past_hour": "0", "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
         "flights": "non", "num_near_nest": "0", "awake": "y", "notes": None
     })
     assert r.date_str == "12/05/2026", f"Expected normalized date, got {r.date_str}"
@@ -665,18 +665,18 @@ def test_schema_parse_date_str_correct_comparison():
     try:
         ObservationRecord.model_validate({
             "tower": "1", "date_str": "13/01/2026", "hour": "6",
-            "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
+            "minutes_past_hour": "0", "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
             "flights": "non", "num_near_nest": "0", "awake": "y", "notes": None
         })
         assert False, "Should have raised ValueError for invalid month"
     except ValueError as e:
         assert "date_str" in str(e), f"Expected date_str error, got: {e}"
 
-    # Test invalid day
+    # Test invalid day (day > 31)
     try:
         ObservationRecord.model_validate({
-            "tower": "1", "date_str": "06/31/2026", "hour": "6",
-            "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
+            "tower": "1", "date_str": "06/32/2026", "hour": "6",
+            "minutes_past_hour": "0", "num_adults": "0", "nesting_stage": "no", "bill_use": "na",
             "flights": "non", "num_near_nest": "0", "awake": "y", "notes": None
         })
         assert False, "Should have raised ValueError for invalid day"

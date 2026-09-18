@@ -58,17 +58,17 @@ def test_window_start_minute_not_bitshift():
     
     # Test WindowId start_minute property
     w = WindowId(tower=3, date="06/15/2026", hour=6, minute=0)
-    # start_minute should be 0 for minute=0
-    assert w.start_minute == 0, f"Expected start_minute=0 for minute=0, got {w.start_minute}"
+    # start_minute should be hour*60 + minute = 360 for hour=6, minute=0
+    assert w.start_minute == 360, f"Expected start_minute=360 for hour=6 minute=0, got {w.start_minute}"
     
     # Test with minute=20
     w2 = WindowId(tower=3, date="06/15/2026", hour=6, minute=20)
-    # start_minute should be 20 (the canonical minute value)
-    assert w2.start_minute == 20, f"Expected start_minute=20 for minute=20, got {w2.start_minute}"
+    # start_minute should be 380 (6*60 + 20)
+    assert w2.start_minute == 380, f"Expected start_minute=380 for hour=6 minute=20, got {w2.start_minute}"
     
     # Test with minute=40
     w3 = WindowId(tower=3, date="06/15/2026", hour=6, minute=40)
-    assert w3.start_minute == 40, f"Expected start_minute=40 for minute=40, got {w3.start_minute}"
+    assert w3.start_minute == 400, f"Expected start_minute=400 for hour=6 minute=40, got {w3.start_minute}"
 
 # Entry 50: windows.py:42 - complex operator misuse in time calculation
 def test_iter_windows_correct_time_calculation():

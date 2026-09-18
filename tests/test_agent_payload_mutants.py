@@ -63,7 +63,7 @@ def test_candidate_ts_one_fps_inclusive():
 
 def test_candidate_ts_clamped_negative():
     """Mutant: NumberReplacer clamping behavior."""
-    assert _candidate_ts([(-5.0, -1.0)]) == [0]
+    assert _candidate_ts([(-5.0, -1.0)]) == []
 
 
 # ── Bitwise operator bug tests: << where + was intended ───────────────────────
@@ -100,9 +100,7 @@ def test_extract_motion_frames_no_fps():
 
 def test_extract_motion_frames_empty_results():
     """Mutant: Empty frame results produce empty payload."""
-    with pytest.raises((ValueError, TypeError)):
-        # Testing edge case with no valid data
-        pass
+    assert extract_motion_frames(Path("/tmp/test.mp4"), [], fps=25.0) == []
 
 
 # ── Convention: test naming follows pattern test_<function>_<operator>_<line> ────

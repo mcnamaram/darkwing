@@ -74,6 +74,14 @@ class WindowResult:
 
 def _build_roi(w: int, h: int, roi: Sequence[float]) -> np.ndarray:
     x0, x1, y0, y1 = roi
+    # Clamp to [0, 1] fractional bounds, then convert to pixel indices
+    x0, x1 = min(max(x0, 0.0), 1.0), min(max(x1, 0.0), 1.0)
+    y0, y1 = min(max(y0, 0.0), 1.0), min(max(y1, 0.0), 1.0)
+    # Ensure x0 < x1 and y0 < y1 for valid slice
+    if x0 >= x1:
+        x0, x1 = 0, max(x1, 1)
+    if y0 >= y1:
+        y0, y1 = 0, max(y1, 1)
     mask = np.zeros((h, w), np.uint8)
     mask[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)] = 255
     return mask

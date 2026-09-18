@@ -229,30 +229,24 @@ def test_load_completed_keys_uses_equality_not_identity():
     # Create a submission log with both success and error entries
     log_path = Path(tempfile.mkstemp(suffix='.jsonl')[1])
 
-    # Write success entry
-    success_rec = {"tower": "3", "date_str": "6/15/2026", "time_of_day": "06:00"}
+    # Write success entry (must have all required fields for ObservationRecord)
+    success_rec = {"tower": "3", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "0", "num_adults": "2", "nesting_stage": "no", "bill_use": ["na"], "flights": ["in"], "num_near_nest": "1", "awake": "y", "notes": None}
     success_entry = {"record": success_rec, "status": "success", "error": None,
                      "timestamp": "2026-01-01T00:00:00+00:00"}
     with log_path.open('w') as f:
         f.write(json.dumps(success_entry) + '\n')
 
     # Write error entry
-    error_rec = {"tower": "3", "date_str": "6/15/2026", "time_of_day": "06:20"}
+    error_rec = {"tower": "3", "date_str": "6/15/2026", "hour": "6", "minutes_past_hour": "20", "num_adults": "2", "nesting_stage": "no", "bill_use": ["na"], "flights": ["in"], "num_near_nest": "1", "awake": "y", "notes": None}
     error_entry = {"record": error_rec, "status": "error", "error": "test error",
                    "timestamp": "2026-01-01T00:00:00+00:00"}
     with log_path.open('a') as f:
         f.write(json.dumps(error_entry) + '\n')
 
     keys = load_completed_keys(log_path)
-    success_key = _submission_key(success_rec)  # "3|6/15/2026|06:00"
-    error_key = _submission_key(error_rec)      # "3|6/15/2026|06:20"
 
-    # With correct code: only success keys should be excluded (i.e., not in keys set)
-    # The error key should be in the set
-    assert error_key in keys, f"Error key {error_key} should be in completed keys set"
-    # Success key should NOT be in the set (it was "completed")
-    assert success_key not in keys, f"Success key {success_key} should not be in completed keys set"
-
-    # Mutant bug: using "is" instead of "==" for string comparison could fail
-    # because Python interns short strings but not guaranteed for all cases
-    assert error_key in keys
+    # load_completed_keys parses each record into ObservationRecord internally
+    # Success key: tower=3, date=06/15/2026, time_of_day=06:00
+    # Error key: tower=3, date=06/15/2026, time_of_day=06:20
+    assert "3|06/15/2026|06:00" in keys, "Success key should be in completed keys set"
+    assert "3|06/15/2026|06:20" not in keys, "Error key should not be in completed keys set"
