@@ -8,7 +8,7 @@
 - **Dry-run flows** are tested without ever launching Chromium.
 - **Browser automation** is tested by mocking `load_form` and `submit_observation`; real browser runs happen manually (`DARKWING_HEADLESS=false`) during smoke testing.
 
-## What's covered (125 tests)
+## What's covered (158 tests)
 
 | Area | File | What's tested |
 | --- | --- | --- |
@@ -19,8 +19,11 @@
 | CLI | `tests/test_cli.py` | `validate` exit codes, `submit --dry-run` output and no-log guarantee, log writing on real submit, resume skipping/retrying, `--no-resume`, partial-failure exit code |
 | Agent Payload Extraction | `tests/test_agent_payload.py` | Interval merging, downsampling, aspect ratio preservation, edge cases |
 | VLM Agent Client | `tests/test_agent.py` | REST client logic, schema validation, provider selection, async proposal |
-| CLI Detection Integration | `tests/test_cli_detect.py` | End-to-end detect flow with mocked agent, async bridge, review window handling |
+| CLI Detection Integration | `tests/test_cli_detect.py` | End-to-end detect flow with mocked agent, async bridge, review window handling, resume |
 | Windowing & State | `tests/test_windows.py` | Window grouping, resumability, JSONL log integrity |
+| Detector | `tests/test_detector.py` | MOG2 bg-sub, ROI mask, contour filtering, verdict classification, frame iteration, mutant-killing tests |
+| Timestamp Extraction | `tests/test_timestamp.py` | OCR extraction, user flag parsing, time-of-day offset arithmetic |
+| E2E Pipeline | `tests/test_e2e_pipeline.py` | End-to-end detection → VLM → review index flow |
 
 ## What's NOT covered
 

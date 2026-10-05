@@ -1,0 +1,4 @@
+tower,date_str,hour,minutes_past_hour,num_adults,nesting_stage,bill_use,flights,num_near_nest,awake,notes
+3,6/15/2026,7,00,2,no,na,non,2,y,
+3,6/15/2026,7,20,2,no,na,non,2,y,
+3,6/15/2026,7,40,0,no,na,non,0,n,

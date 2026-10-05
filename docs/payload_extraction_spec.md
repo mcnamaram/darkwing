@@ -4,7 +4,7 @@ This document defines the exact architecture, data structures, and algorithms fo
 
 ## 1. Objectives
 
-- Minimize VLM cost and latency by aggressively reducing the frame rate of active motion segments to **1 FPS**, capped at **15 keyframes max per 20-minute window**.
+- Minimize VLM cost and latency by aggressively reducing the frame rate of the 60-second observation span to **1 FPS**, capped at **15 keyframes max per observation span**.
 - Ensure reliable frame retrieval from local video sources without flaky seek operations.
 - Avoid memory bloat by performing a lazy second-pass extraction on `REVIEW` windows only.
 - Downscale frames to a lightweight resolution (~640x360, preserving aspect ratio) and convert to highly compressed JPEG bytes.

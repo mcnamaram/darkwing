@@ -24,7 +24,7 @@ No apps, no webhooks, no API keys. The browser does the work.
 | Frame Source | `src/darkwing/frames.py` | Video frame abstraction (`LocalVideoSource`, synthetic test source) |
 | Windows | `src/darkwing/windows.py` | Observation window grouping, JSONL state, resumability |
 | Agent Payload | `src/darkwing/agent_payload.py` | Extract 1-FPS JPEG keyframes from REVIEW windows (MVP3-1) |
-| VLM Agent | `src/darkwing/agent.py` | Lightweight REST client for Gemini/OpenAI (MVP3-2) |
+| VLM Agent | `src/darkwing/agent.py` | Provider-agnostic REST client for OpenAI-compatible VLMs (MVP3-2) |
 | Form Submit | `src/darkwing/form_submit.py` | Playwright browser automation |
 | CLI | `src/darkwing/cli.py` | `darkwing validate/submit/detect` entry point |
 
@@ -49,10 +49,20 @@ CSV file → read_csv() → [ObservationRecord] → cmd_submit() (cli.py)
 ### Detect path
 
 ```sh
-Video file → LocalVideoSource → detector.process_frame() (MOG2)
+Video file → LocalVideoSource → detector.iter_frames() (frame decimation) → detector.process_frame() (MOG2)
                                     ├─ per frame: FrameResult (blobs, ts_sec, ...)
+                                    │
+                                    ├─ per-window state tracking:
+                                    │   ├─ bird_first_seen[wid] = first detection timestamp
+                                    │   ├─ span_end_ts[wid] = first_detection_ts + 60s
+                                    │   └─ windows_reached.add(window_id) (track covered windows)
+                                    │
+                                    ├─ frame collection:
+                                    │   ├─ before first detection: check bird, no collection
+                                    │   └─ after first detection: collect frames within 60s span
+                                    │
                                     └─ classify_window() → SKIP | REVIEW | MANUAL
-                                         └─ REVIEW: extract_motion_frames() → JPEG keyframes
+                                         └─ REVIEW: extract_motion_frames(start_ts=first_detection_ts) → JPEG keyframes
                                                       └─ AIObservationAgent.propose_observation() → ObservationRecord
                                                            └─ append to review_index.jsonl
 ```

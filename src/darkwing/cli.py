@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import datetime
+import logging
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -17,10 +20,29 @@ from darkwing import windows as win
 from darkwing.frames import open_source
 from darkwing import agent as ai_agent
 from darkwing import agent_payload
+from darkwing import timestamp as ts_mod
 import asyncio
 
 DEFAULT_LOG_PATH = Path("submitted_log.jsonl")
 DETECTOR_VERSION = "detector-v1"
+OBSERVATION_SPAN_SEC = agent_payload.OBSERVATION_SPAN_SEC  # 60 s
+
+# Trace logging
+_TRACING_ENABLED = os.environ.get('DARKWING_TRACE_CLI', '').lower() in ('1', 'true', 'yes')
+_logger = logging.getLogger(__name__)
+if _TRACING_ENABLED:
+    if not _logger.handlers:
+        _handler = logging.StreamHandler()
+        _handler.setFormatter(logging.Formatter('[TRACE] %(message)s'))
+        _logger.addHandler(_handler)
+        _logger.setLevel(logging.DEBUG)
+    _logger.propagate = False  # avoid duplicate output via root logger
+
+
+def _trace(msg: str) -> None:
+    """Emit a trace message when DARKWING_TRACE_CLI=1."""
+    if _TRACING_ENABLED:
+        _logger.debug(msg)
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -108,31 +130,24 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     REVIEW windows are sent to the VLM agent, which appends an
     ``ai_observation`` proposal to the review index for human audit.
     """
-    import json
-    from pathlib import Path as _P
-
-    from darkwing.schema import ObservationRecord
-
     date = args.date
     tower = args.tower
     fps = args.fps
     sample_every = args.sample_every
-    out_dir = _P(args.out_dir) / date / f"tower{tower}"
+    out_dir = Path(args.out_dir) / date / f"tower{tower}"
     manifest = out_dir / "review_index.jsonl"
 
-    if args.agent and agent is None:
-        try:
-            agent = ai_agent.AIObservationAgent()
-        except ValueError as exc:
-            print(f"✗ --agent requested but no VLM key available: {exc}", file=sys.stderr)
-            return 1
-    
+    vlm_provider = os.environ.get('VLM_PROVIDER')
     # Ensure agent is typed for awaitable member access
     vlm_agent: ai_agent.AIObservationAgent = agent  # type: ignore
 
     # 1. enumerate windows, skip done (resume)
     hours = range(args.hours[0], args.hours[1] + 1) if args.hours else win.OBSERVATION_HOURS
     all_w = win.iter_windows(tower, date, hours)
+    if args.hours:
+        # End hour only includes the window starting at minute 0 (not 20 or 40).
+        end_hour = args.hours[1]
+        all_w = [w for w in all_w if w.hour != end_hour or w.minute == 0]
     done = win.resume_keys(manifest)
     pending = win.pending_windows(all_w, done)
     print(f"Windows: {len(all_w)} total, {len(pending)} pending (done={len(done)}).")
@@ -141,17 +156,72 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
         print("Nothing to do — all windows already processed.")
         return 0
 
-    src = open_source(args.source, path=_P(args.source_path), fps=fps)
+    src = open_source(args.source, path=Path(args.source_path), fps=fps)
     d = det.Detector()
-    glare_hours = args.glare_hours or list(det.DEFAULT_GLARE_HOURS)
 
-    # 2. group frames by window (assumes clip starts at 06:00 for hour alignment)
-    clip_start_hour = 6
+    # Determine sample_every from actual video fps for 1 fps sampling.
+    # This ensures we check one frame per real wall-clock second.
+    if src.fps:
+        sample_every = max(1, int(round(src.fps)))
+    else:
+        sample_every = args.sample_every
+
+    # 2. Determine the true video start time via OCR/metadata, falling back to
+    #    the user-provided flag. This aligns video wall-clock time with window
+    #    boundaries.
+    if args.video_start_time:
+        video_start = ts_mod.parse_user_start_time(args.video_start_time)
+        source_label = "user-provided flag"
+    else:
+        video_start = ts_mod.extract_video_start_time(Path(args.source_path))
+        if video_start:
+            source_label = "automatically (OCR)"
+        else:
+            video_start = None
+            source_label = None
+
+    # clip_start_hour: the hour the first window starts in. The raw timestamps
+    # from the source are elapsed-seconds from clip start.
+    clip_start_hour = args.hours[0] if args.hours else 6
+
+    # Compute the offset in seconds to align raw timestamps with wall-clock time.
+    # Uses time-of-day arithmetic only (not full datetime subtraction) so the
+    # dates don't matter. E.g., video_start=06:59:54, clip_start_hour=7 → +6s.
+    if video_start:
+        offset_seconds = ts_mod.compute_time_offset(video_start, clip_start_hour)
+    else:
+        offset_seconds = 0
+
+    if source_label:
+        print(f"Video start time extracted: {video_start.strftime('%H:%M:%S')} "
+              f"(via {source_label}); clip_start_hour={clip_start_hour}; "
+              f"offset_seconds={offset_seconds:+.1f} (subtracted; frames before "
+              f"{clip_start_hour:02d}:00:00 are skipped)")
+
     frame_window_map = {w.window_id: w for w in pending}
     collected: dict = {wid: [] for wid in frame_window_map}
+    # Track per-window first-bird-detection time and span end.
+    bird_first_seen: dict = {}
+    span_end_ts: dict = {}  # window_id -> exclusive end time of span
+    windows_reached: set = set()
+    _window_reached_logged: set = set()  # windows we already logged for reaching
+
+    # Cutoff: if no bird detected by the cutoff (19:00 / 39:00 / 59:00 within
+    # the hour = 1140 s into the 20-min window), skip that window. This ensures
+    # a full 60-second observation span can fit before the next window starts.
+    cutoff_seconds = win.WINDOW_CUTOFF_SEC  # 1140 s = 19 * 60
+
+    _trace(f"Starting frame loop: sample_every={sample_every}, offset={offset_seconds}, "
+           f"clip_start_hour={clip_start_hour}, cutoff={cutoff_seconds}s")
 
     for idx, ts, frame in det.iter_frames(src.frames(), sample_every, src.fps):
-        sec = int(ts)
+        # Convert raw elapsed seconds to seconds since clip_start_hour.
+        # Video starts offset_seconds early; skip those frames and subtract
+        # the offset so detection starts cleanly at the reported start time.
+        real_ts = ts - offset_seconds
+        if real_ts < 0:
+            continue  # frame is before clip_start (e.g. 06:59:xx for a 07:xx window)
+        sec = int(real_ts)
         wh = sec // 3600 + clip_start_hour
         minute = (sec % 3600) // 60
         minute = (minute // win.WINDOW_MIN) * win.WINDOW_MIN
@@ -159,14 +229,63 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
         w = frame_window_map.get(wid_key)
         if w is None:
             continue
-        fr = d.process_frame(frame, idx, ts)
-        collected[w.window_id].append(fr)
+
+        windows_reached.add(w.window_id)
+
+        # Seconds into the current 20-minute window.
+        seconds_into_window = real_ts - ((w.hour - clip_start_hour) * 3600 + w.minute * 60)
+
+        # If we haven't detected a bird yet in this window:
+        if w.window_id not in bird_first_seen:
+            # If we're past the cutoff and still no bird, skip this window entirely.
+            if seconds_into_window > cutoff_seconds:
+                _trace(f"[CUTOFF] Window {w.window_id}: no bird by "
+                       f"{seconds_into_window:.1f}s (cutoff={cutoff_seconds}s), "
+                       f"skipping remaining frames")
+                continue  # stop sampling this window; no bird by cutoff
+            # Log window reached once
+            if w.window_id not in _window_reached_logged:
+                _window_reached_logged.add(w.window_id)
+                _trace(f"[WINDOW REACHED] {w.window_id} "
+                       f"frame={idx} real_ts={real_ts:.1f}s "
+                       f"seconds_into_window={seconds_into_window:.1f}s")
+
+            # Process frame for detection.
+            fr = d.process_frame(frame, idx, real_ts)
+            if fr.blobs:
+                # First detection! Record it and set up the 60-second observation span.
+                bird_first_seen[w.window_id] = real_ts
+                span_end_ts[w.window_id] = real_ts + OBSERVATION_SPAN_SEC
+                collected[w.window_id].append(fr)
+                _trace(f"[FIRST BIRD DETECTED] Window {w.window_id}: "
+                       f"ts={real_ts:.1f}s, blobs={len(fr.blobs)}, max_area={fr.max_blob_area}, "
+                       f"span_end={span_end_ts[w.window_id]:.1f}s")
+            # Else: no bird yet, don't collect the frame.
+        else:
+            # We already detected a bird and are collecting the observation span.
+            # Only collect frames that fall within [first_detection_ts, first_detection_ts + 60].
+            if real_ts < span_end_ts[w.window_id]:
+                fr = d.process_frame(frame, idx, real_ts)
+                collected[w.window_id].append(fr)
+            # Else: we're past the observation span, skip this frame.
 
     # 3. classify + append
     n_skip = n_review = n_manual = 0
     for w in pending:
+        first_det = bird_first_seen.get(w.window_id)
         frs = collected.get(w.window_id, [])
-        res = det.classify_window(frs, w, glare_hours, version=DETECTOR_VERSION)
+
+        if first_det is None:
+            # No bird detected in this window.
+            if w.window_id not in windows_reached:
+                # Window doesn't exist in the video — emit a warning.
+                print(f"⚠️  No frames collected for window {w.window_id} "
+                      f"({w.hour:02d}:{w.minute:02d}) — video may not cover this window")
+                continue
+            # Window exists but no bird → SKIP. Pass empty frames to classifier.
+            frs = []
+
+        res = det.classify_window(frs, w, version=DETECTOR_VERSION)
         rec = {
             "window_id": res.window_id,
             "tower": res.tower,
@@ -181,13 +300,23 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             "detector_version": res.detector_version,
             "glare_reason": res.glare_reason,
         }
-        
+
         # Phase 3: AI Agent Integration (REQ-7)
-        if args.agent and res.verdict is det.Verdict.REVIEW:
+        if vlm_provider and res.verdict is det.Verdict.REVIEW:
             # 1. Payload Extraction (Phase 1)
-            frames_to_send = agent_payload.extract_motion_frames(src, frs)
+            frames_to_send = agent_payload.extract_motion_frames(
+                Path(args.source_path), frs, fps=src.fps,
+                first_detection_ts=first_det,
+            )
             if frames_to_send:
                 # 2. Agent Proposal (Phase 2)
+                if agent is None:
+                    try:
+                        agent = ai_agent.AIObservationAgent()
+                    except ValueError as exc:
+                        print(f"✗ Failed to initialize VLM agent: {exc}", file=sys.stderr)
+                        return 1
+                    vlm_agent = agent
                 # context_metadata maps to agent.propose_observation's context_metadata arg
                 ctx = {
                     "tower": res.tower,
@@ -196,10 +325,19 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                     "minute": res.minute,
                     "detector_version": res.detector_version
                 }
-                proposal = await vlm_agent.propose_observation(frames_to_send, context_metadata=ctx)
-                rec["ai_observation"] = proposal.model_dump()
-        
+                try:
+                    proposal = await vlm_agent.propose_observation(frames_to_send, context_metadata=ctx)
+                    rec["ai_observation"] = proposal.model_dump()
+                    print(f"[AI PROPOSAL] Window {w.window_id}: AI observation generated")
+                except Exception as exc:
+                    print(f"⚠️  VLM analysis failed for window {w.window_id}: {exc}")
+                    # Continue without AI observation for this window
         win.append_result(manifest, rec)
+        _trace(
+            f"[RESULT] Window {w.window_id}: verdict={res.verdict.value}, "
+            f"first_detection_ts={res.first_detection_ts}, max_blob_area={res.max_blob_area}, "
+            f"sample_count={res.sample_count}, glare_reason={res.glare_reason!r}"
+        )
         if res.verdict is det.Verdict.SKIP:
             n_skip += 1
         elif res.verdict is det.Verdict.REVIEW:
@@ -248,23 +386,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="Path to local mp4 when --source=local")
     p_det.add_argument("--fps", type=float, default=None,
                        help="Override clip fps for timestamp derivation")
+    p_det.add_argument("--video-start-time", default=None,
+                       help="Video start time in HH:MM:SS or HH:MM format (e.g. '06:59:54'). "
+                            "If not provided, Claude Code will attempt automatic extraction via OCR/metadata.")
     p_det.add_argument("--sample-every", type=int, default=25,
                        help="Process every Nth frame (25 ≈ 1fps @25fps)")
     p_det.add_argument("--hours", type=int, nargs=2, default=None,
                        metavar=("H1", "H2"),
                        help="Hour range to process, e.g. 6 21 (default all)")
-    p_det.add_argument("--glare-hours", type=int, nargs="+", default=None,
-                       help="Hours forced to MANUAL verdict (default 11 12 13)")
     p_det.add_argument("--out-dir", default="footage",
                        help="Output root for review_index.jsonl")
-    p_det.add_argument("--agent", action="store_true",
-                       help="Invoke the VLM agent on REVIEW windows to propose ObservationRecords")
+
     p_det.set_defaults(func=cmd_detect)
 
     args = parser.parse_args(argv)
     result = args.func(args)
     if hasattr(args, "func") and args.func.__name__ == "cmd_detect":
-        import asyncio
         return asyncio.run(result)
     return result
 

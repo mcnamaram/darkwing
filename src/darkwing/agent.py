@@ -1,87 +1,191 @@
 """MVP3 Phase 2: VLM agent client for observation proposals.
 
-Lightweight stdlib (urllib) REST client — no SDK bloat (REQ-6). Talks to
-Gemini, sends downscaled keyframes + context, enforces the ObservationRecord
-JSON schema on the response, returns a validated record.
+Provider-agnostic agent using OpenAI-compatible API format.
+Works with any provider (Ollama, OpenRouter, vLLM, llama.cpp, LM Studio, etc.)
+that exposes a /v1/chat/completions endpoint.
 """
 from __future__ import annotations
 
 import base64
 import json
 import os
-import urllib.request
 from typing import Any, Dict, List, Optional
+
+import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from darkwing.schema import ObservationRecord
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-
-SYSTEM_PROMPT = (
-    "You are an expert ornithologist analyzing Chimney Swift nesting tower "
-    "footage. Propose one observation record for the 60-second window shown. "
-    "Output strict JSON matching the provided schema. Short-code maps:\n"
-    " nesting_stage: no,bld,egg,nst,fld\n"
-    " bill_use: na,mat,fd,egg,nst,ps,po,oth\n"
-    " flights: in,out,chg,non\n"
-    " awake: y,n,mbe,nap\n"
-    " num_adults 0-10; num_near_nest 0-5 (0=NA). minutes_past_hour in 0,20,40."
-)
+# System prompt for Chimney Swift observation analysis
+SYSTEM_PROMPT = """You are an expert ornithologist analyzing Chimney Swift nesting tower footage.
+Propose one observation record for the 60-second window shown. Output strict JSON matching the provided schema.
+Short-code maps:
+nesting_stage: no,bld,egg,nst,fld
+bill_use: na,mat,fd,egg,nst,ps,po,oth
+flights: in,out,chg,non
+awake: y,n,mbe,nap
+num_adults 0-10; num_near_nest 0-5 (0=NA). minutes_past_hour in 0,20,40."""
 
 
 def _b64(frames: List[bytes]) -> List[str]:
+    """Encode JPEG frames to base64 strings."""
     return [base64.b64encode(f).decode("ascii") for f in frames]
 
 
-def _gemini_payload(frames: List[bytes], ctx: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
-    parts: List[Dict[str, Any]] = [{"text": SYSTEM_PROMPT}, {"text": f"Window context: {json.dumps(ctx)}"}]
-    for b in _b64(frames):
-        parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b}})
-    return {
-        "contents": [{"role": "user", "parts": parts}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": schema,
-        },
-    }
-
-
-def _extract_text(resp: Dict[str, Any]) -> str:
-    return resp["candidates"][0]["content"]["parts"][0]["text"]
-
-
 class AIObservationAgent:
-    """Thin VLM client: keyframes + context -> validated ObservationRecord."""
+    """Provider-agnostic VLM client: frames + context -> ObservationRecord.
 
-    def __init__(self, api_key: Optional[str] = None, provider: Optional[str] = None) -> None:
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("No VLM API key: set GEMINI_API_KEY.")
-        self.api_key = key
-        self.provider = provider or "gemini"
+    Reads configuration from environment variables:
+    - VLM_BASE_URL: OpenAI-compatible API endpoint
+    - VLM_MODEL: Model identifier
+    - VLM_API_KEY: API key
+    - VLM_PROVIDER: Human-readable provider label
+    """
 
-    async def _post(self, url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
-        # Using run_in_executor to make sync urllib call awaitable
-        import asyncio
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._sync_post, url, payload, headers)
+    def __init__(self, provider: Optional[str] = None) -> None:
+        # Read all required config from environment
+        self.base_url = os.getenv("VLM_BASE_URL")
+        self.model = os.getenv("VLM_MODEL")
+        self.api_key = os.getenv("VLM_API_KEY")
+        env_provider = os.getenv("VLM_PROVIDER")
 
-    def _sync_post(self, url: str, payload: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
-        req = urllib.request.Request(
-            url, data=json.dumps(payload).encode(), headers=headers, method="POST"
+        # Provider parameter overrides env, but env is required by default
+        self.provider = provider or env_provider
+
+        if not self.base_url:
+            raise ValueError("VLM_BASE_URL environment variable is required")
+        if not self.model:
+            raise ValueError("VLM_MODEL environment variable is required")
+        if not self.api_key:
+            raise ValueError("VLM_API_KEY environment variable is required")
+        if not self.provider:
+            raise ValueError("VLM_PROVIDER environment variable is required")
+
+    async def _post(
+        self,
+        client: httpx.AsyncClient,
+        messages: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Make async POST request to the LLM endpoint."""
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": 1000,
+            "temperature": 0.1,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        response = await client.post(
+            f"{self.base_url}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=60.0,
         )
-        with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 ( trusted URL )
-            return json.loads(r.read().decode())
+        response.raise_for_status()
+        return response.json()
 
     async def propose_observation(
         self, frames: List[bytes], context_metadata: Dict[str, Any]
     ) -> ObservationRecord:
-        schema = ObservationRecord.model_json_schema()
-        if self.provider == "gemini":
-            payload = _gemini_payload(frames, context_metadata, schema)
-            url = f"{GEMINI_URL}?key={self.api_key}"
-            headers = {"Content-Type": "application/json"}
-        else:
-            raise ValueError(f"Provider {self.provider} not supported.")
-        resp = await self._post(url, payload, headers)
-        text = _extract_text(resp)
-        return ObservationRecord(**json.loads(text))
+        """Propose an observation by analyzing frames with the VLM.
+
+        Args:
+            frames: JPEG-encoded frame bytes
+            context_metadata: Additional context (tower, date, hour, etc.)
+
+        Returns:
+            ObservationRecord validated against the schema
+        """
+        if not frames:
+            raise ValueError("No frames provided for observation proposal")
+
+        # Build the messages payload
+        # For VLM agents, we send context + base64 frames as part of user message
+        # Many providers accept image_url with base64 data
+        images_b64 = _b64(frames)
+
+        # Construct user content: context metadata + image frames
+        user_content: Dict[str, Any] = {
+            "type": "text",
+            "text": f"Window context (additional metadata): {json.dumps(context_metadata)}",
+        }
+
+        # For providers that support vision (Ollama, OpenAI GPT-4V), include image frames
+        # For providers without vision, the frames are just metadata for context
+        content_items: List[Dict[str, Any]] = [user_content]
+
+        # Add image frames as base64-encoded content
+        # Ollama's OpenAI-compatible endpoint requires data URI prefix: data:image/jpeg;base64,<b64>
+        for img_b64 in images_b64[:5]:  # Limit to 5 frames to control token count
+            content_items.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                }
+            )
+
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": content_items,
+            },
+        ]
+
+        # Make the async HTTP request using httpx
+        async with httpx.AsyncClient() as client:
+            response = await self._post(client, messages)
+
+        # Extract JSON from the model's response
+        choices = response.get("choices", [])
+        if not choices:
+            raise ValueError("No choices in LLM response")
+
+        message_content = choices[0].get("message", {}).get("content", "")
+        if not message_content:
+            raise ValueError("No content in LLM response message")
+
+        # Parse the JSON response from the model
+        try:
+            # Find JSON in the response (handles optional text before/after)
+            json_str = message_content.strip()
+            if not json_str.startswith("{"):
+                # Try to find JSON in the response
+                start = message_content.find("{")
+                end = message_content.rfind("}") + 1
+                if start >= 0 and end > start:
+                    json_str = message_content[start:end]
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse JSON from LLM response: {e}")
+
+        # Merge context fields the VLM may have missed
+        # Context keys: tower, date, hour, minute, detector_version
+        # Schema fields: tower, date_str, hour, minutes_past_hour
+        if "tower" not in data and "tower" in context_metadata:
+            data["tower"] = context_metadata["tower"]
+        if "date_str" not in data and "date" in context_metadata:
+            data["date_str"] = context_metadata["date"]
+        if "hour" not in data and "hour" in context_metadata:
+            data["hour"] = context_metadata["hour"]
+        if "minutes_past_hour" not in data and "minute" in context_metadata:
+            data["minutes_past_hour"] = context_metadata["minute"]
+
+        # Validate against the ObservationRecord schema
+        record = ObservationRecord.model_validate(data)
+        return record
+
+
+def get_adapter() -> AIObservationAgent:
+    """Factory: returns instantiated AIObservationAgent for the configured provider."""
+    return AIObservationAgent()
+
+
+def create_agent() -> AIObservationAgent:
+    """Factory: returns an AIObservationAgent instance (alias for get_adapter)."""
+    return get_adapter()

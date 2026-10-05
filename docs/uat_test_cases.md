@@ -204,7 +204,7 @@ Step 2 — only non-duplicate rows are submitted. Step 3 — log has correct cou
 
 ## TC-07: Detect — Motion Detection on Test Video
 
-**Purpose:** Confirm `detect` runs MOG2 background subtraction, groups frames into 10-minute windows, and classifies each window as SKIP / REVIEW / MANUAL.
+**Purpose:** Confirm `detect` runs MOG2 background subtraction, groups frames into 20-minute windows (starting at minute 0, 20, 40 of each hour), applies the 60-second observation span from first detection, and classifies each window as SKIP / REVIEW / MANUAL.
 
 ### Pre-requisites
 

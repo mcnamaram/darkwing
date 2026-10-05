@@ -44,7 +44,7 @@ async def submit_csv_records(records, dry_run=False):
                     })
                 else:
                     success = await submit_observation(
-                        submitter_name=os.getenv("DARKWING_SUBMITTER_NAME"),
+                        submitter_name=os.getenv("DARKWING_SUBMITTER_NAME", "darkwing-agent"),
                         tower=rec.tower,
                         date_str=rec.date_str,
                         hour=rec.hour,
@@ -140,7 +140,7 @@ async def submit_observation(
         num_near_nest_other: str | None,
         awake: str,
         notes: str,
-        context: BrowserContext | None = None
+        context: BrowserContext
 ) -> bool:
     """Submit one observation record. Returns True on success."""
     # Expand short codes to long-form labels for form interaction

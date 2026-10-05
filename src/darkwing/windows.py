@@ -14,12 +14,16 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Tuple
 
 # Protocol: targeted hours 6..21, windows of WINDOW_MIN minutes.
 OBSERVATION_HOURS: range = range(6, 22)
 WINDOW_MIN = 20
 WINDOWS_PER_HOUR = 60 // WINDOW_MIN  # 3 (minutes 0, 20, 40)
+# Seconds into each 20-min window at which we stop sampling if no bird has
+# been detected yet. A 60-s observation span must fit before the next window
+# starts, so we need detection at or before 19:00 / 39:00 / 59:00.
+WINDOW_CUTOFF_SEC = 19 * 60  # 1140 s
 
 
 @dataclass(frozen=True)
@@ -83,7 +87,3 @@ def append_result(manifest_path: Path, record: Dict) -> None:
 def pending_windows(all_windows: Iterable[WindowId],
                     done: Set[str]) -> List[WindowId]:
     return [w for w in all_windows if w.window_id not in done]
-
-
-# re-export for callers that import the alias used in plan text
-from typing import Tuple  # noqa: E402

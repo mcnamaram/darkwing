@@ -17,17 +17,17 @@ def test_detect_synthetic(tmp_path, capsys):
         "--tower", "3",
         "--source", "synthetic",
         "--hours", "6", "7",
-        "--glare-hours", "12",
         "--out-dir", str(out),
     ])
     assert rc == 0
     manifest = out / "06/15/2026" / "tower3" / "review_index.jsonl"
     assert manifest.exists()
     lines = [json.loads(l) for l in manifest.read_text().splitlines() if l.strip()]
-    assert len(lines) == 6  # 2 hours * 3 windows
+    assert len(lines) == 1  # only 06:00 window gets frames (12s synthetic video)
     verdicts = {r["window_id"]: r["verdict"] for r in lines}
     # hour 6 & 7 are not glare hours -> SKIP (no blobs in synthetic default)
     assert all(v == "skip" for v in verdicts.values())
+    assert "T3_06152026_0600" in verdicts
 
 
 def test_detect_resume_skips_done(tmp_path, capsys):

@@ -34,6 +34,27 @@ darkwing submit observations.csv --dry-run
 darkwing submit observations.csv
 ```
 
+## VLM Configuration (Optional)
+
+To enable the `detect` command for automated observation proposals from video footage, configure a Vision Language Model (VLM) via environment variables. DarkWing uses a single OpenAI-compatible adapter — it works with any provider (Ollama, OpenRouter, vLLM, llama.cpp, LM Studio, etc.).
+
+```bash
+# Example .env additions for local Ollama:
+VLM_BASE_URL="http://localhost:11434/v1"
+VLM_MODEL="swift-detector-v1"
+VLM_API_KEY="ollama"
+VLM_PROVIDER="ollama"
+```
+
+| Variable | Required | Description | Example |
+| --- | --- | --- | --- |
+| `VLM_BASE_URL` | Yes | OpenAI-compatible API endpoint | `http://localhost:11434/v1` (Ollama), `https://openrouter.ai/api/v1` |
+| `VLM_MODEL` | Yes | Model identifier | `swift-detector-v1`, `gpt-4o-mini` |
+| `VLM_API_KEY` | Yes | API key (use `"ollama"` for local Ollama) | `ollama`, `sk-or-...` |
+| `VLM_PROVIDER` | Yes | Human-readable label for logs/errors | `ollama`, `openrouter` |
+
+If `VLM_PROVIDER` is not set, the `detect` command runs without VLM analysis (no agent proposals).
+
 ## CLI
 
 ```sh

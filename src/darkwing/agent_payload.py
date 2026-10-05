@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import cv2
-import numpy as np
 
 from darkwing.detector import FrameResult
 from darkwing.frames import LocalVideoSource

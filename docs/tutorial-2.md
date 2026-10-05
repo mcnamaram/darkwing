@@ -36,7 +36,6 @@ Optional flags:
 | `--sample-every` | `25` | Process every Nth frame (25 ≈ 1 fps on a 25 fps camera). Increase for faster processing, decrease for higher sensitivity. |
 | `--fps` | auto-detected | Override the detected FPS if timestamp derivation is wrong. |
 | `--hours` `H1 H2` | all hours | Process only between hours H1 and H2, e.g. `--hours 6 21` to skip daytime. |
-| `--glare-hours` `H1 H2 ...` | `11 12 13` | Hours to force a `MANUAL` verdict (direct sun causes false positives). |
 | `--out-dir` | `footage` | Directory where `review_index.jsonl` and keyframes are written. |
 
 This runs MOG2 background-subtraction on the video, grouping frames into 10-minute observation windows. Each window is classified:
@@ -160,6 +159,6 @@ Windows classified as `MANUAL` are excluded from VLM analysis. They are listed i
 | Symptom | Likely Cause | Fix |
 |---|---|---|
 | `REVIEW=0` on a video you know has birds | `--sample-every` too high, or dawn/dusk lighting | Lower `--sample-every` to 10 or 15 |
-| `MANUAL=many` during midday | Direct sunlight causes MOG2 false positives | Use `--glare-hours 10 11 12 13 14` |
+| `MANUAL=many` during midday | Sun/glare creates large shadow blobs, exceeding 6000px² threshold | Review the flagged windows in the review index |
 | Agent exits with "no API key" | `GEMINI_API_KEY` or `OPENAI_API_KEY` not in `.env` | Add the key to `.env` and source it |
 | CSV has wrong time stamps | FPS not auto-detected correctly | Pass `--fps 30` (or actual camera fps) |

@@ -1,0 +1,56 @@
+Windows: 48 total, 44 pending (done=4).
+Video start time extracted: 06:59:56 (via automatically (OCR)); clip_start_hour=6; offset_seconds=-3596.0
+Starting frame processing with sample_every=10, fps=10.001276969909668
+Cutoff seconds for no-bird detection: 1140s into each 20-min window
+[WINDOW REACHED] Window T3_06152026_0600 (hour=06, minute=00) first reached at frame 3597, real_ts=-0.5s
+Finished processing 3604 total frames
+Windows reached: ['T3_06152026_0600']
+Windows with bird first seen: []
+Windows with collected frames: []
+[WINDOW SKIPPED] Window T3_06152026_0600: reached but no bird detected
+[WINDOW RESULT] Window T3_06152026_0600: verdict=skip, first_detection_ts=None, max_blob_area=0, sample_count=0, glare_reason=''
+⚠️  No frames collected for window T3_06152026_0620 (06:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_0640 (06:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_0820 (08:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_0840 (08:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_0900 (09:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_0920 (09:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_0940 (09:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1000 (10:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1020 (10:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1040 (10:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1100 (11:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1120 (11:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1140 (11:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1200 (12:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1220 (12:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1240 (12:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1300 (13:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1320 (13:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1340 (13:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1400 (14:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1420 (14:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1440 (14:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1500 (15:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1520 (15:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1540 (15:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1600 (16:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1620 (16:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1640 (16:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1700 (17:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1720 (17:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1740 (17:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1800 (18:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1820 (18:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1840 (18:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1900 (19:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1920 (19:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_1940 (19:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_2000 (20:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_2020 (20:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_2040 (20:40) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_2100 (21:00) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_2120 (21:20) — video may not cover this window
+⚠️  No frames collected for window T3_06152026_2140 (21:40) — video may not cover this window
+Review index -> footage/06/15/2026/tower3/review_index.jsonl
+  SKIP=1  REVIEW=0  MANUAL=0

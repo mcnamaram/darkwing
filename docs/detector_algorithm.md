@@ -6,11 +6,11 @@ This document provides a comprehensive, step-by-step breakdown of how DarkWing's
 
 ## High-Level Architecture: The Three-Bucket Design
 
-To maximize reviewer efficiency while maintaining 100% scientific integrity, the detector aggregates per-frame computer vision signals into a **10-minute observation window** classified into one of three buckets:
+To maximize reviewer efficiency while maintaining 100% scientific integrity, the detector aggregates per-frame computer vision signals into a **20-minute observation window** classified into one of three buckets:
 
-1. **`SKIP` (Automatic Skip):** No movement matching bird criteria was detected. Safe to bypass. Saves up to **80%+** of review time in low-glare morning/evening periods.
+1. **`SKIP` (Automatic Skip):** No movement matching bird criteria was detected. Safe to bypass. Saves up to **80%+** of review time.
 2. **`REVIEW` (Targeted Spot-Check):** Motion matching bird size bounds was detected. The system records the first timestamp of motion so the reviewer can jump straight to it.
-3. **`MANUAL` (Manual Fallback / Glare Block):** High-glare hours (such as noon solar angles) or implausibly massive movement are detected. The detector marks the window as unreliable and flags it for full manual review to prevent false-negative misses.
+3. **`MANUAL` (Manual Fallback / Glare Block):** Implausibly massive movement or ambiguous-sized blobs are detected (typically from glare/shadow or tiny distant birds). The detector marks the window as unreliable and flags it for full manual review to prevent false-negative misses.
 
 ```sh
                   ┌──────────────────────┐
@@ -104,40 +104,64 @@ cnts, _ = cv2.findContours(real, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 ---
 
-## Phase 2: Window-Level Classification (`classify_window`)
+## Phase 2: Window-Level Processing (`cmd_detect`)
 
-Once all sampled frames for a 10-minute window are processed, the system aggregates the metrics to assign the final verdict.
+The detection CLI orchestrates window-level processing by:
 
-### 1. Solar Glare Detection (Deterministic)
+1. Iterating frames via `iter_frames()` (1 FPS sampling based on video fps, with time-offset alignment from OCR-extracted video start time)
+2. For each 20-minute window, tracking per-window state during frame iteration:
+   * **`bird_first_seen`**: Timestamp of first frame with bird detection in this window
+   * **`span_end_ts`**: Set to `bird_first_seen + 60s` when first detection occurs
+   * **`windows_reached`**: Set of window IDs that appeared in the video (for coverage warnings)
+3. Frame collection policy:
+   * **Before first detection**: Process each sampled frame for blobs; collect nothing
+   * **After first detection**: Collect all frames within the 60-second observation span (`[first_detection_ts, first_detection_ts + 60s]`)
+4. Cutoff logic: If no bird is detected by `WINDOW_CUTOFF_SEC` (1140 seconds = 19:00/39:00/59:00 within the hour) into the 20-minute window, sampling stops for that window. A 60-second observation span would not fit before the next window starts.
+5. Post-processing: For each window, call `classify_window()` to determine the verdict.
+
+After per-window processing, the system aggregates the metrics to assign the final verdict.
+
+### 1. Area-Based Classification (Pure Threshold)
 
 ```python
-if window.hour in set(glare_hours):
-    glare_reason = f"configured glare hour {window.hour}"
+# During per-frame processing, accumulate the maximum blob area across all
+# frames in the window and set glare_reason if it exceeds glare_max_area (6000).
+# Then during classification, the final verdict is determined purely by area:
+#   - max_blob_area >= glare_max_area → MANUAL (implausible glare/shadow)
+#   - max_blob_area >= 400   → REVIEW  (bird-sized blob)
+#   - otherwise           → SKIP    (no reliable detection)
 ```
 
-* **Why:** Empirical validation proved that noon hours (12:00–12:59) cause extreme shadow-glare sweeps across the chimney wall as the sun passes overhead. Classifying these as `SKIP` is unsafe.
-* **Action:** Automatically flags the window as `MANUAL`.
+* **Why:** The system now uses area thresholds exclusively, eliminating the legacy distinction between "glare hours" (configuration) and "implausible blobs" (dynamic detection).
 
-### 2. Large-Blob Glare Filter (Dynamic)
+* **Action:** For reliable bird detection, the window must contain at least 20 frames. Smaller windows (e.g., end-of-clip fragments) are marked SKIP with an "insufficient samples" reason.
+
+* **Thresholds:**
+  * `glare_max_area = 6000` — blobs exceeding this are implausibly large for a bird at 640×360 resolution.
+  * `BIRD_MAX_AREA = 400` — a bird-sized blob should be at least 400 pixels² (a ≈22px circle) to distinguish from noise.
+
+* **Advantages:**
+  * **Simpler logic** — removes the need for static glare-hour configuration
+  * **More robust** — area thresholds work consistently across lighting conditions
+  * **Better diagnostics** — distinguishing between truly large glare blobs and bird detections
+  * **Deterministic behavior** — same input always produces the same verdict
+
+### 2. Classification Logic
 
 ```python
-if fr.max_blob_area >= glare_max_area and not glare_reason:
-    glare_reason = f"implausible blob area {fr.max_blob_area}px^2"
-```
-
-* **Why:** A bird flying near the tower rarely exceeds a few thousand pixels. A blob exceeding `glare_max_area` (default: 15,000 pixels) represents a camera shift, a large bird landing on the lens, or a major lighting change.
-* **Action:** Automatically escalates the window to `MANUAL`.
-
-### 3. Review vs. Skip Assignment
-
-```python
-if glare_reason:
-    verdict = Verdict.MANUAL
-elif has_bird:
-    verdict = Verdict.REVIEW
+# Three-bucket verdict assignment based on accumulated metrics
+if max_blob_area >= glare_max_area:
+    verdict = Verdict.MANUAL   # Glare/shadow detected
+elif has_bird and len(frames) >= 20:
+    verdict = Verdict.REVIEW    # Bird detected with sufficient samples
 else:
-    verdict = Verdict.SKIP
+    verdict = Verdict.SKIP      # Ambiguous/small/no detection
 ```
 
-* **`REVIEW`:** If any frame contains a valid bird-sized blob, the window is marked for review. The timestamp of the first frame with motion is captured as `first_detection_ts` so the review tool can position the playback head instantly.
-* **`SKIP`:** If no glare is present and zero frames contained candidate blobs, the window is skipped.
+* **`MANUAL`:** An implausibly large blob (≥6000px²) is detected. This is typically glare, shadow, or a camera shift — the window is marked for manual review.
+
+* **`REVIEW`:** A bird-sized blob (≥400px²) is detected and the window has enough samples (20+). The detector reliably identifies a bird and the reviewer can focus on just these verified windows.
+
+* **`SKIP`:** No bird-sized blob or insufficient samples. If no frames are collected (video doesn't cover this window), a warning is emitted instead of SKIP.
+
+* **Cutoff enforcement:** Even if a bird-sized blob is found, if the window has fewer than 20 frames (typical at the start or end of a clip), the verdict is SKIP to prevent false positives from incomplete data.

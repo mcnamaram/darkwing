@@ -118,14 +118,21 @@ jpegs: list[bytes] = extract_motion_frames(
 ```python
 from darkwing.agent import AIObservationAgent
 
-agent = AIObservationAgent()   # reads GEMINI_API_KEY or OPENAI_API_KEY
+agent = AIObservationAgent()   # reads VLM_BASE_URL, VLM_MODEL, VLM_API_KEY, VLM_PROVIDER from env
 rec = agent.propose_observation(jpeg_frames: list[bytes], context_metadata: dict)
 ```
 
 - `propose_observation` is `async` — call with `asyncio.run()` or from an async context.
 - Returns an `ObservationRecord` validated against the Pydantic schema.
-- Provider auto-selected from env: `GEMINI_API_KEY` → Gemini, `OPENAI_API_KEY` → OpenAI.
-- Gemini enforces JSON schema on response; OpenAI uses `response_format=json_schema`.
+- Uses OpenAI-compatible API format: POST to `{VLM_BASE_URL}/chat/completions` with JSON payload containing `model`, `messages`, etc.
+- Works with any provider exposing an OpenAI-compatible `/v1/chat/completions` endpoint (Ollama, OpenRouter, vLLM, llama.cpp, LM Studio, etc.).
+- The agent constructs the request using:
+  - `VLM_BASE_URL`: base URL of the API endpoint (e.g., `http://localhost:11434/v1`)
+  - `VLM_MODEL`: model identifier to use
+  - `VLM_API_KEY`: API key for authentication
+  - `VLM_PROVIDER`: human-readable provider label (used in logging)
+- The system prompt instructs the model to output JSON matching the ObservationRecord schema (short-codes).
+- The response is parsed from `response.choices[0].message.content` and validated against the schema.
 
 ---
 
@@ -140,8 +147,9 @@ from darkwing.detector import process_frame, classify_window, WindowResult, Fram
 result: FrameResult = process_frame(frame, frame_idx, fps, roi_mask)
 
 # Per-window (after processing all frames in a window)
-classification: WindowResult = classify_window(frame_results, window, glare_hours, version="v1")
+classification: WindowResult = classify_window(frame_results, window, version="v1")
 # classification.verdict in {"skip", "review", "manual"}
+# Uses pure area thresholds (no --glare-hours configuration needed)
 ```
 
 ---
@@ -164,14 +172,50 @@ with LocalVideoSource(Path("clip.mp4")) as src:
 ## `darkwing/windows`
 
 ```python
-from darkwing.windows import build_windows, read_review_index, append_review_window
+from darkwing.windows import (
+    OBSERVATION_HOURS,      # range(6, 22)
+    WINDOW_MIN,             # 20 minutes
+    WINDOW_CUTOFF_SEC,      # 1140 seconds (19:00/39:00/59:00 within an hour)
+    WindowId,
+    iter_windows,
+    resume_keys,
+    append_result,
+    pending_windows,
+)
 ```
 
 ```python
-windows = build_windows(Path("clip.mp4"), fps, hours=[6, 7, 8])
-review_index = read_review_index(Path("review_index.jsonl"))
-append_review_window(Path("review_index.jsonl"), window, window_result)
+# Generate the sequence of 20-minute windows to process (06:00–21:00)
+windows = list(iter_windows(tower=3, date="06/15/2026"))
+# windows: [WindowId(tower=3, date="06/15/2026", hour=6, minute=0), ...]
+
+# Resume: load already-completed window keys from a JSONL review index
+done = resume_keys(Path("footage/06/15/2026/tower3/review_index.jsonl"))
+
+# Filter out windows already processed
+pending = pending_windows(windows, done)
+
+# Append one window's result as a JSONL line (append-only, resume-safe)
+append_result(Path("footage/06/15/2026/tower3/review_index.jsonl"), {
+    "window_id": "T3_06152026_0700",
+    "verdict": "REVIEW",
+    "first_detection_ts": 12.0,
+})
 ```
+
+Each `WindowId` is identified by (tower, date, hour, minute) where minute is 0, 20, or 40 within the hour. The canonical observation unit is the 20-minute window itself.
+
+For each window, `cmd_detect` tracks:
+- **`bird_first_seen`**: timestamp of the first frame with a bird detection (or `None` if no bird)
+- **`span_end_ts`**: `bird_first_seen + 60s` — end of the 60-second observation span
+- **`windows_reached`**: window IDs that appeared in the video (emits a coverage warning for windows not reached)
+
+Classification per window:
+- **`WINDOW_CUTOFF_SEC` = 1140 seconds** into the window (19:00/39:00/59:00 within the hour) — sampling stops for a window that has no bird by then, so a full 60-second span can still fit.
+- **SKIP**: no bird detected by the cutoff within the window (video covers the window but contains no bird)
+- **REVIEW**: bird detected by the cutoff; 60-second observation span is extracted and sent to the VLM agent
+- **MANUAL**: window falls in a configured glare hour or contains an implausible blob
+- **Warning** (no record appended): window not reached — the video ended before the window started
 
 ---
 

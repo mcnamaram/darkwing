@@ -10,8 +10,8 @@ The DarkWing research project automates chimney swift observation data ingestion
     - Resumable submission via `submitted_log.jsonl`.
 - **MVP2: Motion Detection (Complete)**
     - Offline background-subtraction (MOG2) detector.
-    - Aggregation into 10-minute observation windows.
-    - Classification: `SKIP` (no motion), `REVIEW` (motion detected), `MANUAL` (high-glare/unreliable).
+    - Aggregation into 20-minute observation windows (starting at minute 0, 20, 40 of each hour).
+    - Classification: `SKIP` (no bird by cutoff or insufficient samples), `REVIEW` (bird detected, observation span analyzed), `MANUAL` (high-glare/implausible - via area threshold).
 - **MVP3: VLM Agent Integration (Complete)**
     - VLM (Gemini/OpenAI) analysis of keyframes from `REVIEW` windows.
     - Automated generation of `ObservationRecord` JSON from visual data.

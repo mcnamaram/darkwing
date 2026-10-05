@@ -21,7 +21,7 @@ def test_skip_on_static_scene():
     d = Detector()
     frames = [d.process_frame(_frame(), i) for i in range(60)]
     w = WindowId(tower=3, date="06/15/2026", hour=6, minute=0)
-    res = classify_window(frames, w, glare_hours=())
+    res = classify_window(frames, w)
     assert res.verdict is Verdict.SKIP
     assert res.first_detection_ts is None
     assert res.spot_check_due is False
@@ -37,19 +37,25 @@ def test_review_on_moving_blob():
             cv2_circle(f, cx, 90, 12, 0)  # r=12 -> ~452px^2 > min_area
         frames.append(d.process_frame(f, i, float(i)))
     w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
-    res = classify_window(frames, w, glare_hours=())
+    res = classify_window(frames, w)
     assert res.verdict is Verdict.REVIEW
     assert res.first_detection_ts is not None
     assert res.spot_check_due is True
 
 
-def test_manual_on_glare_hour():
+def test_manual_on_glare_hour_with_blob():
     d = Detector()
-    frames = [d.process_frame(_frame(), i) for i in range(60)]  # static, no birds
+    frames = []
+    for i in range(60):
+        f = _frame()
+        if i == 30:
+            # huge white rectangle -> max_blob_area > glare_max_area
+            f[10:170, 10:310] = 220
+        frames.append(d.process_frame(f, i))
     w = WindowId(tower=3, date="06/15/2026", hour=12, minute=0)
-    res = classify_window(frames, w)  # default glare hours include 12
-    assert res.verdict is Verdict.MANUAL
-    assert "glare hour" in res.glare_reason
+    res = classify_window(frames, w)
+    assert res.verdict is Verdict.MANUAL  # Implausibly large blob = glare/shadow
+    assert "implausible" in res.glare_reason
     assert res.spot_check_due is True
 
 
@@ -63,7 +69,7 @@ def test_manual_on_implausible_blob():
             f[10:170, 10:310] = 220
         frames.append(d.process_frame(f, i, float(i)))
     w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
-    res = classify_window(frames, w, glare_hours=())  # not a configured glare hour
+    res = classify_window(frames, w)
     assert res.verdict is Verdict.MANUAL
     assert "implausible" in res.glare_reason
 
@@ -74,7 +80,7 @@ def test_iter_frames_decimates_and_timestamps():
     assert len(out) == 10
     idx, ts, fr = out[1]
     assert idx == 1
-    assert abs(ts - (1 / 25.0)) < 1e-6  # 1 sample @ 25fps = 0.04s
+    assert abs(ts - (10 / 25.0)) < 1e-6  # 10 source frames @ 25fps = 0.4s
 
 
 def test_roi_excludes_border_blob():
@@ -120,7 +126,7 @@ def test_classify_window_verdict_types():
     frames = [d.process_frame(np.full((180, 320, 3), 60, np.uint8), i) for i in range(60)]
     from darkwing.windows import WindowId
     w = WindowId(tower=3, date="06/15/2026", hour=6, minute=0)
-    res = classify_window(frames, w, glare_hours=())
+    res = classify_window(frames, w)
     assert res.verdict is Verdict.SKIP, f"Expected SKIP, got {res.verdict}"
     assert isinstance(res.verdict, Verdict), f"Verdict should be Verdict enum, got {type(res.verdict)}"
 
@@ -192,6 +198,6 @@ def test_classification_uses_correct_numeric():
         frames.append(d.process_frame(f, i))
     from darkwing.windows import WindowId
     w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
-    res = classify_window(frames, w, glare_hours=())
+    res = classify_window(frames, w)
     # Should detect a bird -> REVIEW (not SKIP)
     assert res.verdict is not Verdict.SKIP, "Moving bird should not produce SKIP verdict"

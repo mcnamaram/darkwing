@@ -36,7 +36,13 @@ Integrate an autonomous Vision AI Agent into the `darkwing detect` workflow to a
 \- Implement `AIObservationAgent` (REST client).
 
 * System prompt: Map visual evidence to `ObservationRecord` fields (short-codes).
-* Supports: `GEMINI_API_KEY` and `OPENAI_API_KEY`.
+* Provider-agnostic: Uses OpenAI-compatible `/v1/chat/completions` endpoint.
+* Configuration via environment variables:
+  * `VLM_BASE_URL` — API endpoint (e.g., `http://localhost:11434/v1` for Ollama, `https://openrouter.ai/api/v1`)
+  * `VLM_MODEL` — Model identifier
+  * `VLM_API_KEY` — API key (use `"ollama"` for local Ollama)
+  * `VLM_PROVIDER` — Human-readable label for logs/errors
+* Uses `httpx.AsyncClient` for async HTTP requests.
 
 ### Phase 3: CLI Integration (`src/darkwing/cli.py`)
 

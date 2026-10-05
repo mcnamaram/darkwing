@@ -1,0 +1,73 @@
+Windows: 1 total, 1 pending (done=0).
+Video start time extracted: 06:59:56 (via automatically (OCR)); clip_start_hour=7; offset_seconds=+4.0
+Starting frame processing with sample_every=10, fps=10.001276969909668
+Cutoff seconds for no-bird detection: 1140s into each 20-min window
+[WINDOW REACHED] Window T3_06152026_0700 (hour=07, minute=00) first reached at frame 1, real_ts=4.0s
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1140.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1141.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1142.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1143.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1144.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1145.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1146.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1147.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1148.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1149.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1150.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1151.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1152.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1153.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1154.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1155.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1156.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1157.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1158.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1159.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1160.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1161.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1162.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1163.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1164.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1165.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1166.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1167.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1168.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1169.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1170.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1171.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1172.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1173.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1174.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1175.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1176.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1177.9 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1178.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1179.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1180.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1181.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1182.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1183.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1184.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1185.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1186.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1187.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1188.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1189.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1190.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1191.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1192.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1193.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1194.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1195.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1196.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1197.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1198.8 > cutoff=1140, skipping window (no bird detected)
+[CUTOFF TRIGGERED] Window T3_06152026_0700: seconds_into_window=1199.8 > cutoff=1140, skipping window (no bird detected)
+Finished processing 3604 total frames
+Windows reached: ['T3_06152026_0700']
+Windows with bird first seen: []
+Windows with collected frames: []
+[WINDOW SKIPPED] Window T3_06152026_0700: reached but no bird detected
+[WINDOW RESULT] Window T3_06152026_0700: verdict=skip, first_detection_ts=None, max_blob_area=0, sample_count=0, glare_reason=''
+Review index -> footage/06/15/2026/tower3/review_index.jsonl
+  SKIP=1  REVIEW=0  MANUAL=0
