@@ -338,6 +338,7 @@ def classify_window(
     glare_max_area: int = DEFAULT_GLARE_MAX_AREA,
     min_area: int = DEFAULT_MIN_AREA,
     min_sample_count: int = 20,
+    min_bird_frames: int = 3,
     version: str = "detector-v1",
 ) -> WindowResult:
     """Aggregate per-frame results into a three-bucket verdict for one window.
@@ -357,11 +358,16 @@ def classify_window(
     A minimum sample count is required before a window can be REVIEW. With
     only a few frames (e.g. the tail end of a clip), noise can masquerade as
     a bird detection — so those windows are SKIP.
+
+    A bird-sized blob must also persist across at least ``min_bird_frames``
+    frames to count as a detection. A single-frame blob is usually a
+    compression artifact or transient noise rather than a bird.
     """
     has_bird = False
     first_ts: Optional[float] = None
     max_area = 0
     glare_reason = ""
+    bird_frames = 0
 
     for fr in frames:
         max_area = max(max_area, fr.max_blob_area)
@@ -370,10 +376,15 @@ def classify_window(
             if not glare_reason:
                 glare_reason = f"implausible blob area {fr.max_blob_area}px^2"
         elif fr.blobs and fr.max_blob_area >= 400:  # Bird-sized blob threshold
-            if not has_bird:
-                has_bird = True
-                if first_ts is None:
-                    first_ts = fr.ts_sec
+            bird_frames += 1
+            if first_ts is None:
+                first_ts = fr.ts_sec
+
+    if bird_frames >= min_bird_frames:
+        has_bird = True
+    else:
+        has_bird = False
+        first_ts = None
 
     # Three-bucket logic:
     # - Large blob (>= glare_max_area) → MANUAL (shadow sweep / glare)

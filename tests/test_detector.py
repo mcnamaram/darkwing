@@ -305,6 +305,66 @@ def test_fg_frac_uses_subtraction_not_division():
     # fg_frac should reflect the foreground fraction
     assert 0.0 <= fr.fg_frac <= 1.0
 
+def test_persistence_requirement_single_frame_is_skip():
+    """Single-frame bird-sized blob should not trigger REVIEW verdict.
+
+    With min_bird_frames=3 (default), a transient blob appearing in
+    only one frame is treated as noise/artifact, not a bird.
+    """
+    import cv2
+    import numpy as np
+
+    d = Detector()
+    frames = []
+    for i in range(60):
+        f = np.full((180, 320, 3), 60, np.uint8)
+        if i == 30:  # single-frame artifact: dark circle (inside ROI x48-144)
+            cv2.circle(f, (100, 90), 20, (0, 0, 0), -1)  # ~1256 px^2
+        frames.append(d.process_frame(f, i, float(i)))
+    w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
+    res = classify_window(frames, w)
+    assert res.verdict is not Verdict.MANUAL
+    assert res.verdict is Verdict.SKIP, f"Expected SKIP for single-frame blob, got {res.verdict}"
+    assert res.first_detection_ts is None
+
+
+def test_persistence_requirement_two_frames_still_skip():
+    """Two persistent bird-sized frames (< min_bird_frames=3) still yield SKIP."""
+    import cv2
+    import numpy as np
+
+    d = Detector()
+    frames = []
+    for i in range(60):
+        f = np.full((180, 320, 3), 60, np.uint8)
+        if i >= 30:  # 2 frames with blobs, 3rd+ is empty
+            if i < 32:
+                cv2.circle(f, (100, 90), 20, (0, 0, 0), -1)
+        frames.append(d.process_frame(f, i, float(i)))
+    w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
+    res = classify_window(frames, w)
+    assert res.verdict is Verdict.SKIP, f"Expected SKIP for 2-frame blob, got {res.verdict}"
+
+
+def test_persistence_requirement_three_frames_review():
+    """Three persistent bird-sized frames (>= min_bird_frames=3) yield REVIEW."""
+    import cv2
+    import numpy as np
+
+    d = Detector()
+    frames = []
+    for i in range(60):
+        f = np.full((180, 320, 3), 60, np.uint8)
+        if i >= 30:  # 3 frames with blobs
+            if i < 33:
+                cv2.circle(f, (100, 90), 20, (0, 0, 0), -1)
+        frames.append(d.process_frame(f, i, float(i)))
+    w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
+    res = classify_window(frames, w)
+    assert res.verdict is Verdict.REVIEW, f"Expected REVIEW for 3-frame blob, got {res.verdict}"
+    assert res.first_detection_ts is not None
+
+
 # Entry 36: numeric replacement in classification
 def test_classification_uses_correct_numeric():
     """Mutant: numeric replacement in classification — verdict should follow protocol."""

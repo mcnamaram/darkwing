@@ -133,8 +133,6 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     """
     date = args.date
     tower = args.tower
-    fps = args.fps
-    sample_every = args.sample_every
     out_dir = Path(args.out_dir) / date / f"tower{tower}"
     manifest = out_dir / "review_index.jsonl"
 
@@ -159,7 +157,8 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
         print("Nothing to do — all windows already processed.")
         return 0
 
-    src = open_source(args.source, path=Path(args.source_path), fps=fps)
+    src = open_source(args.source, path=Path(args.source_path))
+    fps = src.fps
     d = det.Detector()
 
     # Prime the MOG2 background model by feeding it the first ~30 seconds of
@@ -168,7 +167,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     # model it hasn't learned yet. We prime only for local video sources;
     # the synthetic source starts with a known background.
     if args.source == "local" and args.source_path and Path(args.source_path).exists():
-        prime_n = int((src.fps or 25.0) * 30)  # 30 s at source fps
+        prime_n = int((fps or 25.0) * 30)  # 30 s at source fps
         _cap = cv2.VideoCapture(str(Path(args.source_path)))
         if _cap.isOpened():
             # Create a simple generator for priming
@@ -182,26 +181,29 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             _trace(f"Primed MOG2 with {primed} frames")
         _cap.release()
 
-    # Determine sample_every from actual video fps for 1 fps sampling.
-    # This ensures we check one frame per real wall-clock second.
-    if src.fps:
-        sample_every = max(1, int(round(src.fps)))
+    # Determine sample_every from actual video fps.
+    # Use 2fps for high-speed video (>=10fps) to capture fast bird movements;
+    # 1fps for slower video. No user parameter needed — this is automatic.
+    if fps and fps >= 10:
+        sample_every = max(1, int(round(fps / 2)))  # 2fps for fast video
+    elif fps:
+        sample_every = max(1, int(round(fps)))  # 1fps for slower video
     else:
-        sample_every = args.sample_every
+        sample_every = 10  # fallback default
+    if fps:
+        _trace(f"Smart sampling: {fps:.1f}fps -> sample_every={sample_every} "
+               f"({fps/sample_every:.1f}fps actual)")
+    else:
+        _trace("Smart sampling: fallback (unknown fps -> sample_every=10)")
 
-    # 2. Determine the true video start time via OCR/metadata, falling back to
-    #    the user-provided flag. This aligns video wall-clock time with window
-    #    boundaries.
-    if args.video_start_time:
-        video_start = ts_mod.parse_user_start_time(args.video_start_time)
-        source_label = "user-provided flag"
-    elif args.source_path and Path(args.source_path).exists():
+    # 2. Determine the true video start time via OCR on burned-in timestamp.
+    # This aligns video wall-clock time with window boundaries. The clip_start_hour
+    # (from --hours[0]) is the first observation window hour, while video_start
+    # reflects when the recording actually began (may be slightly before, e.g.
+    # 06:59:54 for a 07:xx window). Falls back gracefully if OCR is unavailable.
+    if args.source_path and Path(args.source_path).exists():
         video_start = ts_mod.extract_video_start_time(Path(args.source_path))
-        if video_start:
-            source_label = "automatically (OCR)"
-        else:
-            video_start = None
-            source_label = None
+        source_label = "automatically (OCR)" if video_start else None
     else:
         video_start = None
         source_label = None
@@ -237,7 +239,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     # a full 60-second observation span can fit before the next window starts.
     cutoff_seconds = win.WINDOW_CUTOFF_SEC  # 1140 s = 19 * 60
 
-    _trace(f"Starting frame loop: sample_every={sample_every}, offset={offset_seconds}, "
+    _trace(f"Starting frame loop: sample_every={sample_every}, offset={offset_seconds:.1f}s, "
            f"clip_start_hour={clip_start_hour}, cutoff={cutoff_seconds}s")
 
     for idx, ts, frame in det.iter_frames(src.frames(), sample_every, src.fps):
@@ -278,7 +280,11 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
 
             # Process frame for detection.
             fr = d.process_frame(frame, idx, real_ts)
-            if fr.blobs:
+            # Only start the observation span on a bird-sized blob (>= min_area).
+            # process_frame already filters blobs by min_area, but we gate
+            # explicitly on the 400px^2 bird threshold so that a marginally-large
+            # non-bird artifact (below bird threshold) doesn't start a false span.
+            if fr.blobs and fr.max_blob_area >= 400:
                 # First detection! Record it and set up the 60-second observation span.
                 bird_first_seen[w.window_id] = real_ts
                 span_end_ts[w.window_id] = real_ts + OBSERVATION_SPAN_SEC
@@ -311,7 +317,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             # Window exists but no bird → SKIP. Pass empty frames to classifier.
             frs = []
 
-        res = det.classify_window(frs, w, version=DETECTOR_VERSION)
+        res = det.classify_window(frs, w, version=DETECTOR_VERSION, min_bird_frames=3)
 
         # Phase 2: Backfill to refine first-detection timestamp (hybrid approach)
         if (
@@ -321,12 +327,21 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             and args.source_path
             and Path(args.source_path).exists()
         ):
-            refined_ts = d.backfill_first_detection(
+            # Backfill works in video-elapsed seconds; first_detection_ts is in
+            # real_ts (clip-start-relative, offset already subtracted). Convert
+            # to video-elapsed for the scan, then convert the result back.
+            video_elapsed_ts = res.first_detection_ts + offset_seconds
+            refined_video_ts = d.backfill_first_detection(
                 Path(args.source_path),
-                res.first_detection_ts,
+                video_elapsed_ts,
                 clip_start_hour=clip_start_hour,
                 fps=src.fps,
-                max_search_sec=30.0,
+                max_search_sec=60.0,
+            )
+            refined_ts = (
+                refined_video_ts - offset_seconds
+                if refined_video_ts is not None
+                else None
             )
             if refined_ts is not None and refined_ts < res.first_detection_ts:
                 res.first_detection_ts = refined_ts
@@ -459,13 +474,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="Frame source kind (local mp4 now; camera later)")
     p_det.add_argument("--source-path", default="",
                        help="Path to local mp4 when --source=local")
-    p_det.add_argument("--fps", type=float, default=None,
-                       help="Override clip fps for timestamp derivation")
-    p_det.add_argument("--video-start-time", default=None,
-                       help="Video start time in HH:MM:SS or HH:MM format (e.g. '06:59:54'). "
-                            "If not provided, Claude Code will attempt automatic extraction via OCR/metadata.")
-    p_det.add_argument("--sample-every", type=int, default=25,
-                       help="Process every Nth frame (25 ≈ 1fps @25fps)")
     p_det.add_argument("--hours", type=int, nargs=2, default=None,
                        metavar=("H1", "H2"),
                        help="Hour range to process, e.g. 6 21 (default all)")

@@ -9,8 +9,7 @@ By the end, you will have processed a camera video file into structured observat
 You have followed [Setup](./setup.md) and have:
 
 - An active `.venv` with the package installed (`pip install -e ".[dev]"`).
-- A `.env` file with `DARKWING_FORM_URL`, `DARKWING_SUBMITTER_NAME`, and an API key (`GEMINI_API_KEY` or `OPENAI_API_KEY`).
-- Playwright browsers installed (`playwright install chromium`).
+- A `.env` file with `VLM_BASE_URL`, `VLM_MODEL`, `VLM_API_KEY`, and `VLM_PROVIDER` for VLM analysis.
 - A local camera video file (MP4 or AVI) on your machine.
 - The tower number and observation date for the footage.
 
@@ -33,132 +32,99 @@ Optional flags:
 | Flag | Default | Description |
 |---|---|---|
 | `--source` | `local` | Frame source kind. Use `local` for MP4/AVI files. |
-| `--sample-every` | `25` | Process every Nth frame (25 ≈ 1 fps on a 25 fps camera). Increase for faster processing, decrease for higher sensitivity. |
-| `--fps` | auto-detected | Override the detected FPS if timestamp derivation is wrong. |
-| `--hours` `H1 H2` | all hours | Process only between hours H1 and H2, e.g. `--hours 6 21` to skip daytime. |
-| `--out-dir` | `footage` | Directory where `review_index.jsonl` and keyframes are written. |
+| `--hours` `H1 H2` | all hours | Process only between hours H1 and H2, e.g. `--hours 19 19` for evening only. |
+| `--out-dir` | `footage` | Directory where `review_index.jsonl` is written. |
 
-This runs MOG2 background-subtraction on the video, grouping frames into 10-minute observation windows. Each window is classified:
+This runs MOG2 background-subtraction on the video, grouping frames into 20-minute observation windows. Each window is classified:
 
 - `SKIP` — no motion detected (safe to ignore).
 - `REVIEW` — motion matching bird criteria (queued for VLM analysis).
 - `MANUAL` — high-glare/unreliable (flagged for human review).
 
-Expected output:
+**Smart sampling:** The CLI automatically detects the video's native fps and samples at 2fps for high-speed footage (≥10fps) or 1fps for slower footage — no manual tuning required.
 
-```
-Processing ~/Desktop/my_camera_footage.mp4...
-  SKIP=12  REVIEW=3  MANUAL=1
-Review index -> footage/review_index.jsonl
-```
-
-## 2. Analyze `REVIEW` windows with VLM
-
-The agent is invoked with the `--agent` flag on the same `detect` command. Run it again on the same footage:
-
-```bash
-.venv/bin/darkwing detect --date 06/15/2026 --tower 3 --source local --source-path ~/Desktop/my_camera_footage.mp4 --agent
-```
-
-This re-reads `review_index.jsonl` and processes every `REVIEW` window that does not yet have an `analysis` field:
-
-1. Extracts up to 15 JPEG keyframes at 1 fps (60-second span around the first detected motion frame).
-2. Sends the keyframes to the configured VLM (Gemini or OpenAI).
-3. Receives a structured `ObservationRecord` proposal (adult count, nesting stage, flight codes, etc.).
-4. Writes the analysis back into `review_index.jsonl` alongside the detection result.
-
-If no API key is set, this command exits with a clear error before making any VLM calls.
+**Backfill detection:** For `REVIEW` windows, the system scans backward from the MOG2 detection time using a dark-threshold fallback (immune to MOG2 adaptation artifacts) to refine the first-detection timestamp. This fixes timing gaps such as the 4-second delay at 19:47:13 vs the bird's actual appearance at 19:47:09.
 
 Expected output:
 
 ```
-Analyzing window 1/3 (06:00–06:10)...
-  num_adults=2, flights=in;out, nesting=no, confidence=high
-Analyzing window 2/3 (06:20–06:30)...
-  num_adults=0, flights=non, nesting=no, confidence=high
+Starting frame loop: sample_every=5, offset=+6s, clip_start_hour=19, cutoff=1140s
+[WINDOW REACHED] T3_06262026_1900 frame=2280 real_ts=3600.0s
+[FIRST BIRD DETECTED] Window T3_06262026_1900: ts=19.0s, blobs=1, max_area=3152
 ...
+[BACKFILL] Window T3_06262026_1940: refined first detection 19:47:09
+[AI PROPOSAL] Window T3_06262026_1940: AI observation generated
+Review index -> footage/06/26/2026/tower3/review_index.jsonl
   SKIP=12  REVIEW=3  MANUAL=1
-Review index -> footage/review_index.jsonl
+```
+
+## 2. VLM analysis (automatic)
+
+When `VLM_PROVIDER` is set in your environment, `REVIEW` windows automatically get VLM analysis during detection. The VLM receives:
+
+1. Up to 15 JPEG keyframes extracted over a **120-second span** (1 minute before + 1 minute after the refined first detection).
+2. Context metadata (tower, date, hour, minute).
+3. An optimized prompt for the gemma4:12b model that handles fast bird movements.
+
+Each analyzed window gets an `ai_observation` field in the `review_index.jsonl`:
+
+```json
+{
+  "ai_observation": {
+    "tower": 3,
+    "date_str": "06/26/2026",
+    "hour": 19,
+    "minutes_past_hour": 40,
+    "num_adults": 1,
+    "nesting_stage": "nst",
+    "bill_use": ["na"],
+    "flights": ["in"],
+    "num_near_nest": 0,
+    "awake": "y",
+    "notes": null
+  }
+}
 ```
 
 ## 3. Review the generated records
 
-Open `footage/review_index.jsonl`. Each analyzed `REVIEW` window has this structure:
+Open `footage/06/26/2026/tower3/review_index.jsonl`. The review index contains one JSON object per observation window:
 
 ```json
 {
-  "verdict": "REVIEW",
-  "first_motion_frame": 542,
-  "analysis": {
-    "num_adults": 2,
-    "nesting_stage": "no",
-    "flights": "in;out",
-    "num_near_nest": 1,
-    "awake": "y",
-    "notes": "Two adults circling above the chimney..."
-  },
-  "keyframe_paths": [
-    "footage/frames/window_0001_000542.jpg",
-    "footage/frames/window_0001_000567.jpg"
-  ],
-  "confidence": "high",
-  "raw_vlm_response": "..."
+  "window_id": "T3_06262026_1940",
+  "tower": 3,
+  "date": "06/26/2026",
+  "hour": 19,
+  "minute": 40,
+  "verdict": "review",
+  "first_detection_ts": 2829.5,
+  "first_detection_wallclock": "19:47:09",
+  "max_blob_area": 2096,
+  "sample_count": 20,
+  "spot_check_due": true,
+  "detector_version": "detector-v1",
+  "glare_reason": ""
 }
 ```
 
-**You are responsible for reviewing and approving the VLM's interpretation before submission.** Adjust `num_adults`, `nesting_stage`, `notes`, or any other field by editing this JSON directly.
+**You are responsible for reviewing and approving the VLM's interpretation before submission.** Verify the detection time, adult count, flights, and nesting stage.
 
-## 4. Export analyzed records to a submission-ready CSV
+## 4. Export and submit
 
-```bash
-.venv/bin/darkwing agent ~/Desktop/my_camera_footage.mp4
-```
-
-This reads `review_index.jsonl`, extracts all `REVIEW` entries that have an `analysis` field, and writes a CSV to `footage/generated_observations.csv` with one row per window. The CSV uses the exact column schema DarkWing expects for submission.
-
-Expected output:
-
-```
-Exported 3 observation(s) to footage/generated_observations.csv
-```
-
-## 5. Submit the generated records
+Generate a CSV from the reviewed observations:
 
 ```bash
-.venv/bin/darkwing submit footage/generated_observations.csv
+.venv/bin/darkwing validate observations.csv   # check your own CSV
+.venv/bin/darkwing submit observations.csv --dry-run  # verify without submitting
+.venv/bin/darkwing submit observations.csv      # submit for real (opens browser)
 ```
-
-The generated CSV is validated and submitted to the Google Form. The submission log (`submitted_log.jsonl`) ensures resumability — if the submission is interrupted, re-running picks up where it left off.
-
-Expected output:
-
-```
-Submitting 3 record(s) to the form...
-✓ 3/3 record(s) submitted.
-```
-
-## 6. End-to-end shortcut
-
-All three steps (detect → agent → submit) can be chained with `--agent` and `--submit`:
-
-```bash
-.venv/bin/darkwing detect --date 06/15/2026 --tower 3 --source local --source-path ~/Desktop/my_camera_footage.mp4 --agent --submit
-```
-
-> **Important:** This shortcut submits automatically without human review of the VLM output. Review the `review_index.jsonl` before using `--submit` to ensure the agent's interpretations are accurate.
-
-## What to do with MANUAL windows
-
-Windows classified as `MANUAL` are excluded from VLM analysis. They are listed in `review_index.jsonl` but need one of two actions:
-
-1. **Watch the footage segment manually.** If chimney swifts are present, create a CSV row by hand and submit it.
-2. **If no swifts were present**, no action is needed — the window is already excluded from submission.
 
 ## Common Issues
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| `REVIEW=0` on a video you know has birds | `--sample-every` too high, or dawn/dusk lighting | Lower `--sample-every` to 10 or 15 |
+| `REVIEW=0` on a video you know has birds | No birds in the specified `--hours` range | Check hours; birds may be outside the range |
 | `MANUAL=many` during midday | Sun/glare creates large shadow blobs, exceeding 6000px² threshold | Review the flagged windows in the review index |
-| Agent exits with "no API key" | `GEMINI_API_KEY` or `OPENAI_API_KEY` not in `.env` | Add the key to `.env` and source it |
-| CSV has wrong time stamps | FPS not auto-detected correctly | Pass `--fps 30` (or actual camera fps) |
+| VLM analysis fails | API endpoint or model misconfigured | Verify `.env` has correct `VLM_BASE_URL`, `VLM_MODEL`, `VLM_API_KEY`, `VLM_PROVIDER` |
+| `first_detection_ts` is 4s late | MOG2 adaptation delay | Already handled: backfill detection refines the timestamp automatically |
