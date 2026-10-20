@@ -34,13 +34,13 @@ def test_detect_resume_skips_done(tmp_path, capsys):
     out = tmp_path / "footage"
     main([
         "detect", "--date", "06/15/2026", "--tower", "3",
-        "--source", "synthetic", "--hours", "6", "6", "--out-dir", str(out),
+        "--source", "synthetic", "--hours", "6", "7", "--out-dir", str(out),
     ])
-    # re-run same; should report nothing pending
+    # re-run same; should skip the already-done window
     rc = main([
         "detect", "--date", "06/15/2026", "--tower", "3",
-        "--source", "synthetic", "--hours", "6", "6", "--out-dir", str(out),
+        "--source", "synthetic", "--hours", "6", "7", "--out-dir", str(out),
     ])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "Nothing to do" in captured.out
+    assert "done=1" in captured.out

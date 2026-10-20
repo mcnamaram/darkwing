@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import cv2
 import datetime
 import logging
 import os
@@ -144,8 +145,10 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     # 1. enumerate windows, skip done (resume)
     hours = range(args.hours[0], args.hours[1] + 1) if args.hours else win.OBSERVATION_HOURS
     all_w = win.iter_windows(tower, date, hours)
-    if args.hours:
-        # End hour only includes the window starting at minute 0 (not 20 or 40).
+    if args.hours and args.hours[0] != args.hours[1]:
+        # Multi-hour range: the end hour only includes the window starting at
+        # minute 0 (not 20 or 40), so a 60-s observation span fits before the
+        # next hour's windows begin.
         end_hour = args.hours[1]
         all_w = [w for w in all_w if w.hour != end_hour or w.minute == 0]
     done = win.resume_keys(manifest)
@@ -158,6 +161,26 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
 
     src = open_source(args.source, path=Path(args.source_path), fps=fps)
     d = det.Detector()
+
+    # Prime the MOG2 background model by feeding it the first ~30 seconds of
+    # footage. An unprimed model flags the entire wall as shadow
+    # (shadow_frac ≈ 1.0) and misses birds that haven't changed against a
+    # model it hasn't learned yet. We prime only for local video sources;
+    # the synthetic source starts with a known background.
+    if args.source == "local" and args.source_path and Path(args.source_path).exists():
+        prime_n = int((src.fps or 25.0) * 30)  # 30 s at source fps
+        _cap = cv2.VideoCapture(str(Path(args.source_path)))
+        if _cap.isOpened():
+            # Create a simple generator for priming
+            def _prime_gen():
+                for i in range(prime_n):
+                    ok, frame = _cap.read()
+                    if not ok:
+                        break
+                    yield frame
+            primed = d.prime(_prime_gen(), prime_n)
+            _trace(f"Primed MOG2 with {primed} frames")
+        _cap.release()
 
     # Determine sample_every from actual video fps for 1 fps sampling.
     # This ensures we check one frame per real wall-clock second.
@@ -172,13 +195,16 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     if args.video_start_time:
         video_start = ts_mod.parse_user_start_time(args.video_start_time)
         source_label = "user-provided flag"
-    else:
+    elif args.source_path and Path(args.source_path).exists():
         video_start = ts_mod.extract_video_start_time(Path(args.source_path))
         if video_start:
             source_label = "automatically (OCR)"
         else:
             video_start = None
             source_label = None
+    else:
+        video_start = None
+        source_label = None
 
     # clip_start_hour: the hour the first window starts in. The raw timestamps
     # from the source are elapsed-seconds from clip start.
@@ -286,6 +312,52 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             frs = []
 
         res = det.classify_window(frs, w, version=DETECTOR_VERSION)
+
+        # Phase 2: Backfill to refine first-detection timestamp (hybrid approach)
+        if (
+            res.verdict is det.Verdict.REVIEW
+            and res.first_detection_ts is not None
+            and args.source == "local"
+            and args.source_path
+            and Path(args.source_path).exists()
+        ):
+            refined_ts = d.backfill_first_detection(
+                Path(args.source_path),
+                res.first_detection_ts,
+                clip_start_hour=clip_start_hour,
+                fps=src.fps,
+                max_search_sec=30.0,
+            )
+            if refined_ts is not None and refined_ts < res.first_detection_ts:
+                res.first_detection_ts = refined_ts
+                # Recompute wall-clock with refined timestamp
+                total_sec = int(refined_ts)
+                wh = (total_sec // 3600) + clip_start_hour
+                mm = (total_sec % 3600) // 60
+                ss = total_sec % 60
+                first_wallclock = f"{wh:02d}:{mm:02d}:{ss:02d}"
+                print(
+                    f"[BACKFILL] Window {w.window_id}: refined first detection "
+                    f"{total_sec // 3600:02d}:{(total_sec % 3600) // 60:02d}:{total_sec % 60:02d}"
+                )
+            else:
+                # Fall back to original if backfill didn't refine
+                total_sec = int(res.first_detection_ts)
+                wh = (total_sec // 3600) + clip_start_hour
+                mm = (total_sec % 3600) // 60
+                ss = total_sec % 60
+                first_wallclock = f"{wh:02d}:{mm:02d}:{ss:02d}"
+        else:
+            # Wall-clock timestamp of the first detection (HH:MM:SS) so the report
+            # shows the actual time the bird was seen, not just seconds from clip start.
+            first_wallclock = None
+            if res.first_detection_ts is not None:
+                total_sec = int(res.first_detection_ts)
+                wh = (total_sec // 3600) + clip_start_hour
+                mm = (total_sec % 3600) // 60
+                ss = total_sec % 60
+                first_wallclock = f"{wh:02d}:{mm:02d}:{ss:02d}"
+
         rec = {
             "window_id": res.window_id,
             "tower": res.tower,
@@ -294,6 +366,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             "minute": res.minute,
             "verdict": res.verdict.value,
             "first_detection_ts": res.first_detection_ts,
+            "first_detection_wallclock": first_wallclock,
             "max_blob_area": res.max_blob_area,
             "sample_count": res.sample_count,
             "spot_check_due": res.spot_check_due,
@@ -303,10 +376,12 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
 
         # Phase 3: AI Agent Integration (REQ-7)
         if vlm_provider and res.verdict is det.Verdict.REVIEW:
-            # 1. Payload Extraction (Phase 1)
+            # 1. Payload Extraction (Phase 1) — use the possibly-refined first_detection_ts
+            # and a 2-minute span so the model can see the bird's arrival.
             frames_to_send = agent_payload.extract_motion_frames(
                 Path(args.source_path), frs, fps=src.fps,
-                first_detection_ts=first_det,
+                first_detection_ts=res.first_detection_ts,
+                span_sec=120.0,  # 2 minutes: 1 min before + 1 min after detection
             )
             if frames_to_send:
                 # 2. Agent Proposal (Phase 2)

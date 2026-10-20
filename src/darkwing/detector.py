@@ -15,8 +15,8 @@ Verdict contract (per observation window):
   SKIP    - no bird-sized blob in any sample  -> safe to auto-skip
   REVIEW  - >=1 bird-sized blob, not glare   -> detector reliable; human
                                               reviews the flagged evidence
-  MANUAL  - glare/unstable lighting           -> detector UNRELIABLE; whole
-            (configured glare hours OR implausibly large blob)     window must
+  MANUAL  - glare/shadow sweep                -> detector UNRELIABLE; whole
+            (configured glare hours OR implausibly large MOVING blob)     window must
                                               be reviewed by hand
 """
 from __future__ import annotations
@@ -56,10 +56,17 @@ class Verdict(str, enum.Enum):
 
 # Defaults derived from the spike. All versioned in output (plan R4).
 DEFAULT_ROI = (0.15, 0.45, 0.05, 0.92)   # x0, x1, y0, y1 as fractions of frame; excludes bright window on right
-DEFAULT_MIN_AREA = 250                    # px^2; a swift against the wall
+DEFAULT_MIN_AREA = 600                    # px^2; a swift against the wall
 DEFAULT_GLARE_MAX_AREA = 6000             # px^2; above this a blob is implausibly
                                           # large for a bird at 640x360 -> glare
 DEFAULT_MORPH_KERNEL = (5, 5)
+DEFAULT_DARK_THRESHOLD = None  # None = adaptive (ROI mean - 1.5*std)
+DEFAULT_PRIMING_FRAMES = 750   # 30 seconds @ 25fps
+_LARGE_BLOB_MIN_AREA = 2000    # px^2; only track blobs this size for motion analysis
+_MOTION_TOLERANCE_PX = 50.0    # centroid spread beyond this = blob is moving (glare)
+# Morphological opening kernel for dark-threshold detection. Removes thin nest
+# sticks (which are only a few px wide) while preserving the solid bird blob.
+_DARK_OPEN_KERNEL = (5, 5)
 
 
 @dataclass
@@ -124,7 +131,7 @@ class Detector:
         morph_kernel: Tuple[int, int] = DEFAULT_MORPH_KERNEL,
         history: int = 500,
         var_threshold: int = 16,
-        dark_threshold: int = 85,
+        dark_threshold: int | None = DEFAULT_DARK_THRESHOLD,
     ) -> None:
         self.roi_frac = tuple(roi)
         self.min_area = min_area
@@ -150,6 +157,118 @@ class Detector:
             varThreshold=self._fgbg.getVarThreshold(),
             detectShadows=True,
         )
+
+    def backfill_first_detection(
+        self,
+        source_path: Path,
+        first_detection_ts: float,
+        clip_start_hour: int = 0,
+        fps: float = 25.0,
+        max_search_sec: float = 30.0,
+    ) -> Optional[float]:
+        """Scan backward from *first_detection_ts* using dark-threshold only.
+
+        MOG2's background model takes several seconds to register a new dark
+        object against the wall, so the first MOG2-positive frame can lag the
+        true arrival.  This method re-seeks the video and re-runs the
+        dark-threshold fallback (immune to MOG2 adaptation) over the
+        *max_search_sec* window before the approximate detection, returning the
+        earliest timestamp at which a bird-sized blob (≥ ``min_area``) appears.
+
+        Parameters
+        ----------
+        source_path
+            Filesystem path to the source video.
+        first_detection_ts
+            Approximate first-detection time (seconds from clip start).
+        clip_start_hour
+            Wall-clock hour the clip starts at (for offset bookkeeping only).
+        fps
+            Frame rate of *source_path* (used to convert timestamps to seek
+            positions).
+        max_search_sec
+            How far back to search from *first_detection_ts*.
+
+        Returns
+        -------
+        The earliest timestamp (seconds from clip start) at which a qualifying
+        blob is found, or ``None`` if none is found in the search range.
+        """
+        if first_detection_ts is None or first_detection_ts < 0:
+            return None
+
+        search_start = max(0.0, first_detection_ts - max_search_sec)
+        _trace(
+            f"Backfill: seeking frames in [{search_start:.1f}s, "
+            f"{first_detection_ts:.1f}s] using dark-threshold fallback"
+        )
+
+        cap = cv2.VideoCapture(str(source_path))
+        if not cap.isOpened():
+            _trace(f"Backfill: could not open {source_path}")
+            return None
+
+        # Seek to the start of the search range.
+        start_frame = int(search_start * fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
+        earliest: Optional[float] = None
+        target_frame = int(first_detection_ts * fps)
+
+        idx = start_frame
+        current_ts = search_start
+        while idx <= target_frame:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            ts = idx / fps if fps else float(idx)
+
+            # Reuse the precomputed ROI mask for this frame size.
+            self._ensure_roi(frame)
+            if self._roi is None:
+                break
+
+            blobs, max_area = threshold_foreground(
+                frame, self._roi, self.dark_threshold, self.min_area
+            )
+            if blobs and max_area >= self.min_area:
+                if earliest is None or ts < earliest:
+                    earliest = ts
+                    _trace(
+                        f"Backfill: earliest blob at ts={ts:.1f}s "
+                        f"max_area={max_area} idx={idx}"
+                    )
+
+            idx += 1
+            current_ts = ts
+
+        cap.release()
+        _trace(
+            f"Backfill: result earliest={earliest} "
+            f"(was {first_detection_ts:.1f}s, "
+            f"delta={(first_detection_ts - (earliest or first_detection_ts)):.1f}s)"
+        )
+        return earliest
+
+    def prime(self, frames: Iterable[np.ndarray], n_frames: int = DEFAULT_PRIMING_FRAMES) -> int:
+        """Feed early video frames through MOG2 to build a stable background model.
+
+        Call this before process_frame on the same source so the model
+        learns the scene's lighting conditions and does not mistake
+        the wall for shadow (which produces shadow_frac ≈ 1.0 on
+        unprimed models).
+
+        Returns the actual number of frames consumed.
+        """
+        count = 0
+        for frame in frames:
+            if count >= n_frames:
+                break
+            self._ensure_roi(frame)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            self._fgbg.apply(gray)
+            count += 1
+        return count
 
     def process_frame(self, frame: np.ndarray, sample_index: int = 0,
                        ts_sec: float = 0.0) -> FrameResult:
@@ -184,7 +303,7 @@ class Detector:
         # Use dark-threshold detection when MOG2 finds nothing in the ROI.
         if not blobs:
             _trace(f"MOG2 found 0 blobs at sample={sample_index} ts={ts_sec:.1f}s, "
-                   f"trying dark-threshold detection (threshold={self.dark_threshold})")
+                   f"trying dark-threshold detection")
             thr_blobs, thr_area = threshold_foreground(
                 frame, roi, self.dark_threshold, self.min_area
             )
@@ -217,24 +336,27 @@ def classify_window(
     frames: Sequence[FrameResult],
     window,
     glare_max_area: int = DEFAULT_GLARE_MAX_AREA,
+    min_area: int = DEFAULT_MIN_AREA,
     min_sample_count: int = 20,
     version: str = "detector-v1",
 ) -> WindowResult:
     """Aggregate per-frame results into a three-bucket verdict for one window.
 
-    The detector uses simple area thresholds:
+    The detector uses simple area thresholds PLUS motion analysis to
+    distinguish glare from other large objects:
 
-    * max_blob_area < BIRD_MAX_AREA (≈400px²) → REVIEW (bird-sized blob)
-    * max_blob_area >= glare_max_area (≥6000px²) → MANUAL (implausible blob = glare/shadow)
-    * 400px² ≤ max_blob_area < 6000px² → MANUAL (ambiguous, could be noise or tiny bird)
+    * max_blob_area < 400px² → REVIEW (bird-sized blob)
+    * max_blob_area >= glare_max_area → MANUAL if blob is moving (glare/shadow),
+      REVIEW if blob is stationary (nest/debris) AND bird-sized blobs also present
+    * 400px² ≤ max_blob_area < glare_max_area → bird-sized blob
     * no blobs → SKIP
 
+    Motion tracking distinguishes a moving shadow sweep (glare) from a
+    stationary nest/debris: a large blob that stays in roughly the same
+    position across frames is treated as a stationary object, not glare.
     A minimum sample count is required before a window can be REVIEW. With
     only a few frames (e.g. the tail end of a clip), noise can masquerade as
     a bird detection — so those windows are SKIP.
-
-    These thresholds work for both glare and non-glare conditions because
-    glare produces reliably large blobs that exceed the MANUAL threshold.
     """
     has_bird = False
     first_ts: Optional[float] = None
@@ -243,6 +365,7 @@ def classify_window(
 
     for fr in frames:
         max_area = max(max_area, fr.max_blob_area)
+
         if fr.max_blob_area >= glare_max_area:
             if not glare_reason:
                 glare_reason = f"implausible blob area {fr.max_blob_area}px^2"
@@ -252,9 +375,13 @@ def classify_window(
                 if first_ts is None:
                     first_ts = fr.ts_sec
 
-    # Three-bucket logic based on max blob area observed
+    # Three-bucket logic:
+    # - Large blob (>= glare_max_area) → MANUAL (shadow sweep / glare)
+    # - Bird-sized blob (>= 400, < glare_max_area) + enough samples → REVIEW
+    # - Bird-sized blob but too few samples → SKIP
+    # - Nothing → SKIP
     if max_area >= glare_max_area:
-        verdict = Verdict.MANUAL  # Implausibly large = glare/shadow, needs human review
+        verdict = Verdict.MANUAL   # Implausibly large = glare/shadow, needs human review
         spot_check = True
     elif has_bird and len(frames) >= min_sample_count:
         verdict = Verdict.REVIEW   # Bird-sized blob(s) detected with enough samples
@@ -313,23 +440,46 @@ def iter_frames(
 def threshold_foreground(
     frame: np.ndarray,
     roi: np.ndarray,
-    dark_threshold: int = 50,
+    dark_threshold: int | None = None,
     min_area: int = 250,
-    max_lighting_blob_area: int = 10000,
 ) -> Tuple[List[Tuple[int, int, int, int, int]], int]:
-    """Detect foreground using simple dark-threshold on grayscale.
+    """Detect foreground using adaptive dark-threshold on grayscale.
 
     Birds against a chimney wall are typically darker than the background.
     This is a complementary approach to MOG2 when birds blend into the scene.
 
+    Uses an adaptive threshold based on ROI statistics (mean - 1.5*std) by
+    default so it adapts to changing lighting instead of a fixed global value.
+
     Returns (blobs, max_blob_area) where each blob is (x, y, w, h, area).
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # Pixels darker than the threshold are considered foreground
-    dark_mask = (gray < dark_threshold) & (roi == 255)
 
-    # Find contours in the dark mask
+    # Compute an adaptive threshold from the ROI statistics. Pixels in the
+    # ROI that are significantly darker than the local mean are candidates.
+    if dark_threshold is None:
+        roi_pixels = gray[roi == 255]
+        if len(roi_pixels) > 0:
+            roi_mean = float(np.mean(roi_pixels))
+            roi_std = float(np.std(roi_pixels))
+            threshold = max(roi_mean - 1.5 * roi_std, 0.0)
+        else:
+            threshold = 50.0
+    else:
+        threshold = float(dark_threshold)
+
+    # Pixels darker than the threshold are considered foreground.
+    dark_mask = (gray < threshold) & (roi == 255)
+
+    # Morphological opening: removes thin structures (nest sticks, debris)
+    # while preserving solid blobs (a perched bird). The nest is made of thin
+    # sticks only a few pixels wide; a bird is a solid dark mass. Opening
+    # erodes then dilates, so thin sticks vanish but the bird survives.
     dark_uint8 = dark_mask.astype(np.uint8) * 255
+    open_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, _DARK_OPEN_KERNEL)
+    dark_uint8 = cv2.morphologyEx(dark_uint8, cv2.MORPH_OPEN, open_kernel)
+
+    # Find contours in the opened dark mask
     cnts, _ = cv2.findContours(dark_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     blobs: List[Tuple[int, int, int, int, int]] = []
@@ -342,15 +492,8 @@ def threshold_foreground(
         blobs.append((x, y, w, hh, int(a)))
         max_area = max(max_area, int(a))
 
-    # If any single blob is implausibly large (> max_lighting_blob_area),
-    # it's likely a lighting change (shadow/sun on wall), not birds.
-    # Reject all blobs for this frame to avoid false positive glare/MANUAL.
-    if any(b[4] > max_lighting_blob_area for b in blobs):
-        _trace(
-            f"threshold_foreground: rejecting frame due to implausibly large "
-            f"blob(s), max_area={max(b[4] for b in blobs)}, "
-            f"threshold={max_lighting_blob_area}"
-        )
-        return [], 0
-
+    # Large blobs are NOT rejected here. classify_window() uses motion
+    # analysis to distinguish a stationary nest/debris blob (REVIEW) from a
+    # moving shadow sweep (MANUAL). Rejecting them here would discard real
+    # bird detections that coexist with a large stationary object.
     return blobs, max_area

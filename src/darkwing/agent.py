@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from darkwing.schema import ObservationRecord
+
+# Trace logging
+_TRACING_ENABLED = os.environ.get('DARKWING_TRACE_AGENT', '').lower() in ('1', 'true', 'yes')
+_logger = logging.getLogger(__name__)
+if _TRACING_ENABLED:
+    if not _logger.handlers:
+        _handler = logging.StreamHandler()
+        _handler.setFormatter(logging.Formatter('[AGENT] %(message)s'))
+        _logger.addHandler(_handler)
+        _logger.setLevel(logging.DEBUG)
+    _logger.propagate = False  # avoid duplicate output via root logger
+
+
+def _trace(msg: str) -> None:
+    """Emit a trace message when DARKWING_TRACE_AGENT=1."""
+    if _TRACING_ENABLED:
+        _logger.debug(msg)
 
 # System prompt for Chimney Swift observation analysis
 SYSTEM_PROMPT = """You are an expert ornithologist analyzing Chimney Swift nesting tower footage.
@@ -146,9 +164,21 @@ class AIObservationAgent:
         if not choices:
             raise ValueError("No choices in LLM response")
 
-        message_content = choices[0].get("message", {}).get("content", "")
+        msg = choices[0].get("message", {})
+
+        # Try content first, then reasoning field (some reasoning models like gemma4
+        # put the final output in reasoning rather than content)
+        message_content = msg.get("content", "")
         if not message_content:
-            raise ValueError("No content in LLM response message")
+            message_content = msg.get("reasoning", "")
+        if not message_content:
+            raise ValueError(
+                "No content in LLM response message "
+                f"(tried 'content' and 'reasoning' fields; message keys: {list(msg.keys())})"
+            )
+
+        # Debug: print raw content for troubleshooting
+        _trace(f"VLM raw response content: {message_content[:200]}...")
 
         # Parse the JSON response from the model
         try:

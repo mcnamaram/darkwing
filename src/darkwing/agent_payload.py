@@ -73,12 +73,25 @@ def extract_motion_frames(
     first_detection_ts: Optional[float] = None,
     max_frames: int = DEFAULT_MAX_FRAMES,
     target_width: int = DEFAULT_TARGET_WIDTH,
+    span_sec: float = OBSERVATION_SPAN_SEC,
+    pad_before: float = 0.0,
+    pad_after: float = 0.0,
 ) -> List[bytes]:
     """Extract JPEG keyframe payload for a REVIEW window's observation span.
 
     Returns JPEG-encoded frame buffers (bytes), downscaled to ``target_width``
     preserving aspect ratio, ordered by timestamp. Empty list when there is no
     motion to extract.
+
+    Parameters
+    ----------
+    span_sec
+        Total span length starting at *first_detection_ts* (default 60 s).
+        Set to 120 for a 2-minute window when VLM timing confirmation is needed.
+    pad_before, pad_after
+        Extra seconds to extend the window before/after *span_sec* (default 0).
+        E.g. pad_before=60, pad_after=60 yields a 2-minute window centered on the
+        detection timestamp.
     """
     if fps is None or fps <= 0:
         return []
@@ -91,15 +104,18 @@ def extract_motion_frames(
     if start_ts is None:
         return []
 
-    span_end = start_ts + OBSERVATION_SPAN_SEC
+    window_start = start_ts - pad_before
+    window_start = max(0.0, window_start)
+    span_end = window_start + span_sec + pad_after
 
-    # Step A: motion episodes inside the 60s span, padded +/-2s, union-merged.
+    # Step A: motion episodes inside the window (observation span + padding), padded again for expansion.
     intervals: List[Tuple[float, float]] = []
     for fr in frame_results:
         if not fr.blobs:
             continue
-        if not (start_ts <= fr.ts_sec <= span_end):
+        if not (window_start <= fr.ts_sec <= span_end):
             continue
+        # Apply padding per episode (original spec: +/-2s)
         intervals.append((fr.ts_sec - PAD_SEC, fr.ts_sec + PAD_SEC))
     episodes = _merge_intervals(intervals)
     if not episodes:
