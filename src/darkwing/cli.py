@@ -319,6 +319,77 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
 
         res = det.classify_window(frs, w, version=DETECTOR_VERSION, min_bird_frames=3)
 
+        # Phase 0: Binary LLM bird-presence check for uncertain SKIP verdicts.
+        # When classify_window returns SKIP but bird-sized blobs (>=400px²) were
+        # collected (meaning the bird appeared but may not have persisted for
+        # the full min_bird_frames threshold), ask the LLM a simple YES/NO
+        # question to resolve uncertainty before falling back to SKIP.
+        if (
+            res.verdict is det.Verdict.SKIP
+            and frs
+            and vlm_provider
+            # Only trigger when some blobs were collected but didn't clear the
+            # persistence threshold — indicating a potentially real bird with
+            # brief/partial appearance.
+            and any(fr.blobs for fr in frs)
+        ):
+            # Extract keyframes from the window's collected frames for the LLM.
+            # We use the observation span starting from the earliest blob detection.
+            first_blob_ts = min((fr.ts_sec for fr in frs if fr.blobs), default=None)
+            if first_blob_ts is not None:
+                frames_to_send = agent_payload.extract_motion_frames(
+                    Path(args.source_path),
+                    frs,
+                    fps=src.fps,
+                    first_detection_ts=first_blob_ts,
+                    span_sec=60.0,
+                    max_frames=3,
+                )
+                if frames_to_send:
+                    ctx = {
+                        "tower": w.tower,
+                        "date": w.date,
+                        "hour": w.hour,
+                        "minute": w.minute,
+                        "detector_version": res.detector_version,
+                    }
+                    # Lazy-init the VLM agent for the binary check.
+                    if vlm_agent is None:
+                        try:
+                            vlm_agent = ai_agent.AIObservationAgent()
+                        except ValueError as exc:
+                            _trace(
+                                f"[BINARY CHECK] Window {w.window_id}: skipped "
+                                f"(VLM not configured: {exc})"
+                            )
+                            bird_present = False
+                        else:
+                            bird_present = await vlm_agent.detect_bird(frames_to_send, ctx)
+                    else:
+                        bird_present = await vlm_agent.detect_bird(frames_to_send, ctx)
+                    if bird_present:
+                        # Promote SKIP → REVIEW: a bird was confirmed present.
+                        # Re-classifying with min_bird_frames=3 would still yield SKIP
+                        # (that's why we got SKIP in the first place), so set the
+                        # verdict directly and use the earliest blob ts as detection time.
+                        res.verdict = det.Verdict.REVIEW
+                        earliest_ts = min(
+                            (fr.ts_sec for fr in frs if fr.blobs), default=None
+                        )
+                        if earliest_ts is not None:
+                            res.first_detection_ts = earliest_ts
+                        res.max_blob_area = max(fr.max_blob_area for fr in frs)
+                        res.sample_count = len(frs)
+                        _trace(
+                            f"[BINARY CHECK] Window {w.window_id}: SKIP → REVIEW "
+                            f"(LLM confirmed bird present at {first_blob_ts:.1f}s)"
+                        )
+                    else:
+                        _trace(
+                            f"[BINARY CHECK] Window {w.window_id}: SKIP confirmed "
+                            f"(LLM found no bird)"
+                        )
+
         # Phase 2: Backfill to refine first-detection timestamp (hybrid approach)
         if (
             res.verdict is det.Verdict.REVIEW

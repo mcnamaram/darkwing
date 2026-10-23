@@ -46,6 +46,11 @@ flights: in,out,chg,non
 awake: y,n,mbe,nap
 num_adults 0-10; num_near_nest 0-5 (0=NA). minutes_past_hour in 0,20,40."""
 
+# Binary system prompt for bird-presence detection (uncertainty resolution only).
+BINARY_SYSTEM_PROMPT = """You are an expert ornithologist reviewing surveillance footage.
+Your only task: answer YES or NO — are one or more Chimney Swifts or other birds visible in the observation window?
+Answer with exactly one word: YES or NO. Do not include any explanation or reasoning."""
+
 
 def _b64(frames: List[bytes]) -> List[str]:
     """Encode JPEG frames to base64 strings."""
@@ -106,6 +111,63 @@ class AIObservationAgent:
         )
         response.raise_for_status()
         return response.json()
+
+    async def detect_bird(
+        self, frames: List[bytes], context_metadata: Dict[str, Any]
+    ) -> bool:
+        """Binary bird-presence check for uncertain detections.
+
+        Sends a minimal, simple YES/NO prompt: "Are one or more Chimney Swifts
+        or other birds visible in the observation window?" Only used when the
+        classical CV pipeline is uncertain (e.g. SKIP but bird-sized blobs found
+        for 1-2 frames, or borderline blob sizes).
+
+        Args:
+            frames: JPEG-encoded frame bytes (few keyframes).
+            context_metadata: Window context (tower, date, hour, minute, etc.).
+
+        Returns:
+            True if a bird is present, False if not.
+        """
+        if not frames:
+            raise ValueError("No frames provided for bird detection")
+
+        images_b64 = _b64(frames)
+        content_items: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": (
+                    f"Window context (additional metadata): {json.dumps(context_metadata)}"
+                ),
+            }
+        ]
+        for img_b64 in images_b64[:5]:
+            content_items.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                }
+            )
+
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": BINARY_SYSTEM_PROMPT},
+            {"role": "user", "content": content_items},
+        ]
+
+        async with httpx.AsyncClient() as client:
+            response = await self._post(client, messages)
+        choices = response.get("choices", [])
+        if not choices:
+            raise ValueError("No choices in LLM response")
+        msg = choices[0].get("message", {})
+        message_content = msg.get("content", "")
+        if not message_content:
+            message_content = msg.get("reasoning", "")
+        if not message_content:
+            raise ValueError("No content in LLM response message")
+
+        answer = message_content.strip().upper().strip(".").strip()
+        return answer == "YES"
 
     async def propose_observation(
         self, frames: List[bytes], context_metadata: Dict[str, Any]
