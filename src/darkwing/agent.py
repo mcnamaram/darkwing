@@ -107,7 +107,7 @@ class AIObservationAgent:
             f"{self.base_url}/chat/completions",
             json=payload,
             headers=headers,
-            timeout=60.0,
+            timeout=120.0,
         )
         response.raise_for_status()
         return response.json()
