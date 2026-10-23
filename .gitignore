@@ -71,3 +71,7 @@ obs.numbers
 
 
 footage/
+
+# Local debug artifacts from detection runs
+detect_debug*
+detect_*.txt
