@@ -48,6 +48,46 @@ def _trace(msg: str) -> None:
         _logger.debug(msg)
 
 
+# Stationary blob detection: a blob that stays within this many pixels of its
+# average centroid across frames is treated as a fixed artifact (glare
+# reflection, nest debris) rather than a moving bird. Birds typically shift
+# at least a few pixels between frames even when perched.
+_STATIONARY_SPREAD_PX = 8.0
+
+
+def _is_stationary_blob(frames: Sequence[FrameResult], threshold_px: float = _STATIONARY_SPREAD_PX) -> bool:
+    """Detect if the largest blob in each frame stays in roughly the same position.
+
+    A blob that stays within threshold_px of its average centroid across frames
+    is treated as a fixed artifact (glare reflection, nest debris) rather than
+    a moving bird. Birds typically shift at least a few pixels between frames.
+
+    Returns True if the blob appears stationary.
+    """
+    if len(frames) < 10:
+        return False
+
+    centroids: list[tuple[float, float]] = []
+    for fr in frames:
+        if not fr.blobs:
+            continue
+        # Use the largest blob's centroid
+        largest = max(fr.blobs, key=lambda b: b[4])
+        cx = largest[0] + largest[2] / 2.0
+        cy = largest[1] + largest[3] / 2.0
+        centroids.append((cx, cy))
+
+    if len(centroids) < 5:
+        return False
+
+    xs = [c[0] for c in centroids]
+    ys = [c[1] for c in centroids]
+    x_spread = max(xs) - min(xs)
+    y_spread = max(ys) - min(ys)
+
+    return x_spread < threshold_px and y_spread < threshold_px
+
+
 class Verdict(str, enum.Enum):
     SKIP = "skip"
     REVIEW = "review"
@@ -55,7 +95,7 @@ class Verdict(str, enum.Enum):
 
 
 # Defaults derived from the spike. All versioned in output (plan R4).
-DEFAULT_ROI = (0.15, 0.45, 0.05, 0.92)   # x0, x1, y0, y1 as fractions of frame; excludes bright window on right
+DEFAULT_ROI = (0.15, 0.40, 0.05, 0.92)   # x0, x1, y0, y1 as fractions of frame; excludes bright window on right (reduced x1 to eliminate right-edge glare bleed)
 DEFAULT_MIN_AREA = 600                    # px^2; a swift against the wall
 DEFAULT_GLARE_MAX_AREA = 6000             # px^2; above this a blob is implausibly
                                           # large for a bird at 640x360 -> glare
@@ -67,6 +107,12 @@ _MOTION_TOLERANCE_PX = 50.0    # centroid spread beyond this = blob is moving (g
 # Morphological opening kernel for dark-threshold detection. Removes thin nest
 # sticks (which are only a few px wide) while preserving the solid bird blob.
 _DARK_OPEN_KERNEL = (5, 5)
+
+# Stationary blob detection: a blob that stays within this many pixels of its
+# average centroid across frames is treated as a fixed artifact (glare
+# reflection, nest debris) rather than a moving bird. Birds typically shift
+# at least a few pixels between frames even when perched.
+_STATIONARY_SPREAD_PX = 8.0
 
 
 @dataclass
@@ -166,14 +212,18 @@ class Detector:
         fps: float = 25.0,
         max_search_sec: float = 30.0,
     ) -> Optional[float]:
-        """Scan backward from *first_detection_ts* using dark-threshold only.
+        """Scan backward from *first_detection_ts* using a fresh MOG2 model.
 
         MOG2's background model takes several seconds to register a new dark
         object against the wall, so the first MOG2-positive frame can lag the
-        true arrival.  This method re-seeks the video and re-runs the
-        dark-threshold fallback (immune to MOG2 adaptation) over the
-        *max_search_sec* window before the approximate detection, returning the
-        earliest timestamp at which a bird-sized blob (≥ ``min_area``) appears.
+        true arrival.  This method re-seeks the video and re-runs a fresh MOG2
+        over the *max_search_sec* window before the approximate detection,
+        returning the earliest timestamp at which a bird-sized blob
+        (≥ ``min_area``) appears.
+
+        The fresh model is used (not the adapted one) because the main-loop
+        detector has already seen the bird, so reusing it can't detect it again
+        — the bird has become part of the background model.
 
         Parameters
         ----------
@@ -200,7 +250,7 @@ class Detector:
         search_start = max(0.0, first_detection_ts - max_search_sec)
         _trace(
             f"Backfill: seeking frames in [{search_start:.1f}s, "
-            f"{first_detection_ts:.1f}s] using dark-threshold fallback"
+            f"{first_detection_ts:.1f}s] using fresh MOG2 model"
         )
 
         cap = cv2.VideoCapture(str(source_path))
@@ -208,39 +258,71 @@ class Detector:
             _trace(f"Backfill: could not open {source_path}")
             return None
 
-        # Seek to the start of the search range.
-        start_frame = int(search_start * fps)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        # Use a FRESH MOG2 model for the backfill scan (immune to adaptation
+        # contamination from the main detection loop). The main-loop detector
+        # has already seen the bird, so reusing it can't detect it again.
+        backfill_det = Detector(
+            roi=self.roi_frac,
+            min_area=self.min_area,
+            glare_max_area=self.glare_max_area,
+            morph_kernel=DEFAULT_MORPH_KERNEL,
+            history=self._fgbg.getHistory(),
+            var_threshold=self._fgbg.getVarThreshold(),
+            dark_threshold=self.dark_threshold,
+        )
 
+        # Prime with 30 seconds of frames at actual fps, then scan continuously.
+        # Use sample_every based on actual fps to match main loop behavior.
+        prime_n = int((fps or 25.0) * 30)
+        sample_every = max(1, int(round(fps / 2))) if fps and fps >= 10 else max(1, int(round(fps))) if fps else 1
+
+        # Use ceil to ensure we include the frame where first_detection_ts occurs.
+        # int() truncates, which can miss the last frame if first_detection_ts
+        # is not an exact frame boundary.
+        target_frame = int((first_detection_ts * fps) + 0.5)
         earliest: Optional[float] = None
-        target_frame = int(first_detection_ts * fps)
+        frame_idx = 0
 
-        idx = start_frame
-        current_ts = search_start
-        while idx <= target_frame:
+        # Single continuous pass: read frames from start, prime first prime_n
+        # frames into MOG2, then process every frame until first_detection_ts.
+        # No separate priming loop + seek — that double-feeds MOG2.
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        while frame_idx <= target_frame:
             ok, frame = cap.read()
             if not ok:
                 break
-            ts = idx / fps if fps else float(idx)
+            if frame_idx < prime_n:
+                # Priming phase: feed MOG2 only, don't check for birds
+                backfill_det._ensure_roi(frame)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                backfill_det._fgbg.apply(gray)
+                frame_idx += 1
+                continue
 
-            # Reuse the precomputed ROI mask for this frame size.
-            self._ensure_roi(frame)
-            if self._roi is None:
-                break
-
-            blobs, max_area = threshold_foreground(
-                frame, self._roi, self.dark_threshold, self.min_area
-            )
-            if blobs and max_area >= self.min_area:
-                if earliest is None or ts < earliest:
-                    earliest = ts
-                    _trace(
-                        f"Backfill: earliest blob at ts={ts:.1f}s "
-                        f"max_area={max_area} idx={idx}"
-                    )
-
-            idx += 1
-            current_ts = ts
+            # Processing phase: sample at same rate as main loop to reduce false positives
+            if frame_idx % sample_every != 0:
+                frame_idx += 1
+                continue
+            ts = frame_idx / fps if fps else float(frame_idx)
+            fr = backfill_det.process_frame(frame, frame_idx, ts)
+            if fr.blobs and fr.max_blob_area >= self.min_area:
+                # Accept detections only if they're within the search window
+                # AND have reasonable blob area (main loop typically detects birds
+                # with max_blob_area > 600, so accept blobs >= 600 to allow
+                # the backfill to refine timestamps while still filtering
+                # very small spurious detections from the fresh MOG2 model).
+                if ts >= search_start - 0.5:
+                    if fr.max_blob_area >= 600:
+                        earliest = ts
+                        _trace(
+                            f"Backfill: earliest blob at ts={ts:.1f}s "
+                            f"max_area={fr.max_blob_area} idx={frame_idx}"
+                        )
+                        break
+                    # Blob area too small (likely fresh-MOG2 false positive);
+                    # keep scanning for a better detection.
+                # Detection before search window — keep scanning
+            frame_idx += 1
 
         cap.release()
         _trace(
@@ -313,11 +395,15 @@ class Detector:
                 blobs = thr_blobs
                 max_area = thr_area
 
+        # Include blob coordinates in trace for debugging false positives
+        blob_details = ""
+        if blobs:
+            blob_details = f" blobs=[{', '.join(f'({x},{y},{w},{h},{a})' for x,y,w,h,a in blobs)}]"
         _trace(
             f"sample={sample_index} ts={ts_sec:.1f}s "
             f"frame={w}x{h} roi_px={roi_px} contours={len(cnts)} "
             f"all_areas={all_areas[:10]} min_area={self.min_area} "
-            f"kept={len(blobs)} max_blob_area={max_area} "
+            f"kept={len(blobs)} max_blob_area={max_area}{blob_details} "
             f"fg_frac={float(real.sum()) / roi_px:.4f} "
             f"shadow_frac={float(shadow.sum()) / roi_px:.4f}"
         )
@@ -367,7 +453,7 @@ def classify_window(
     first_ts: Optional[float] = None
     max_area = 0
     glare_reason = ""
-    bird_frames = 0
+    valid_bird_frames = 0
 
     for fr in frames:
         max_area = max(max_area, fr.max_blob_area)
@@ -375,16 +461,44 @@ def classify_window(
         if fr.max_blob_area >= glare_max_area:
             if not glare_reason:
                 glare_reason = f"implausible blob area {fr.max_blob_area}px^2"
-        elif fr.blobs and fr.max_blob_area >= 400:  # Bird-sized blob threshold
-            bird_frames += 1
-            if first_ts is None:
-                first_ts = fr.ts_sec
+        elif fr.blobs and fr.max_blob_area >= 500:  # Bird-sized blob threshold (enhanced)
+            # Analyze blob characteristics to distinguish birds from artifacts
+            has_valid_blobs = False
+            for blob in fr.blobs:
+                x, y, w, h, area = blob
+                # Size check: filter out very small or edge-case small blobs
+                if area < 500:
+                    continue
+                # Aspect ratio check: birds are relatively compact shapes
+                # Extremely elongated blobs are often shadows or moving foliage
+                aspect_ratio = max(w, h) / max(min(w, h), 1)
+                if aspect_ratio > 3.0:
+                    continue
+                # Passed all checks — this is a valid bird-sized blob
+                has_valid_blobs = True
+                break
 
-    if bird_frames >= min_bird_frames:
+            if has_valid_blobs:
+                valid_bird_frames += 1
+                if first_ts is None:
+                    first_ts = fr.ts_sec
+
+    if valid_bird_frames >= min_bird_frames:
         has_bird = True
     else:
         has_bird = False
         first_ts = None
+        if not glare_reason and valid_bird_frames > 0:
+            glare_reason = f"insufficient persistent birds ({valid_bird_frames} < {min_bird_frames})"
+
+    # Stationary blob detection: a blob that stays within _STATIONARY_SPREAD_PX
+    # pixels of its average centroid across frames is treated as a fixed artifact
+    # (glare reflection, nest debris) rather than a moving bird.
+    if has_bird and _is_stationary_blob(frames):
+        has_bird = False
+        first_ts = None
+        if not glare_reason:
+            glare_reason = "stationary blob artifact (not a moving bird)"
 
     # Three-bucket logic:
     # - Large blob (>= glare_max_area) → MANUAL (shadow sweep / glare)
