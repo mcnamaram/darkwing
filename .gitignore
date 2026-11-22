@@ -75,3 +75,7 @@ footage/
 # Local debug artifacts from detection runs
 detect_debug*
 detect_*.txt
+
+# Observation data & research (user data, not committed)
+obs/
+/research/

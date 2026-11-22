@@ -116,7 +116,7 @@ async def clear_form(context: BrowserContext):
     await page.goto(form_url)
     await page.wait_for_load_state("networkidle")
     await page.get_by_role("button", name="Clear form").click()
-    await page.wait_for_timeout(500)
+    await page.wait_for_timeout(700)
     await page.get_by_role("button", name="Clear form").click()
 
 

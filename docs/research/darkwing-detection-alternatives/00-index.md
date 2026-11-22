@@ -9,6 +9,9 @@
 - /Users/mikemcnamara/dev/darkwing/README.md (Project overview)
 - /Users/mikemcnamara/dev/darkwing/Makefile (Build commands)
 - /Users/mikemcnamara/dev/darkwing/pyproject.toml (Dependencies)
+- /Users/mikemcnamara/dev/darkwing/detector_accuracy_report.json (Current metrics: P=0.54, R=0.70, F1=0.61)
+- /Users/mikemcnamara/dev/darkwing/false_positive_blob_analysis.json (FP root causes)
+- /Users/mikemcnamara/dev/darkwing/docs/research/darkwing-detection-alternatives/04-deep-research-update.md (This update)
 
 ## Summary
 The DarkWing bird detection system currently relies on classical computer vision (MOG2 background subtraction with shadow filtering) but faces three critical issues: 1) The threshold_foreground fallback is broken due to incorrect dark_threshold (85 vs wall brightness ~89) causing false positives, 2) MOG2 produces zero blobs in real video due to insufficient background model priming (requires 500+ frames but only runs ~60s post-first-detection), and 3) Test logic bugs skip has_bird checks. Given the operational constraints (still birds, nest vs bird discrimination, changing light patterns, 20-min windows requiring earliest detection), the optimal solution combines three approaches: (a) Fix threshold_foreground with adaptive dark thresholding based on ROI statistics, (b) Implement MOG2 background priming using pre-frame history or transfer learning from similar lighting conditions, and (c) Add template matching or Haar cascades for stationary bird detection to complement motion-based approaches. This hybrid approach addresses the core tension between motion detection (MOG2) and appearance-based detection while maintaining real-time performance.

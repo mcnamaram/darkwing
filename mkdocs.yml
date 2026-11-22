@@ -22,12 +22,12 @@ theme:
         name: Switch to light mode
 
 nav:
-    - Home: index.md
-    - Getting Started:
+  - Home: index.md
+  - Getting Started:
       - Setup: setup.md
       - Tutorial: tutorial-1.md
-    - Project Memory: project_memory.md
-    - System Deep Dives:
+  - Project Memory: project_memory.md
+  - System Deep Dives:
       - Architecture: architecture.md
       - Detector Algorithm: detector_algorithm.md
       - AI Integration: ai_integration.md
@@ -36,4 +36,9 @@ nav:
       - API Reference: api_reference.md
       - Secrets Handling: secrets_handling.md
       - Deployment: deployment.md
-    - Methodologies & Validation: test_strategy.md
+  - Methodologies & Validation: test_strategy.md
+  - Pydantic AI Migration:
+      - Artifact Pyramid: pydantic-migration/00-index.md
+      - Overview: pydantic-migration/README.md
+      - Migration Design: pydantic-migration/03-dossiers/darkwing-pydantic-ai-migration.md
+      - Reference Scaffold: pydantic-migration/03-dossiers/scaffold-full-reference.md
