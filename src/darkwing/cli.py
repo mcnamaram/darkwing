@@ -19,7 +19,7 @@ from darkwing.form_submit import submit_csv_records
 from darkwing import detector as det
 from darkwing import windows as win
 from darkwing.frames import open_source
-from darkwing import agent as ai_agent
+from darkwing.agent import vlm_client_adapter
 from darkwing import agent_payload
 from darkwing import timestamp as ts_mod
 import asyncio
@@ -27,6 +27,27 @@ import asyncio
 DEFAULT_LOG_PATH = Path("submitted_log.jsonl")
 DETECTOR_VERSION = "detector-v1"
 OBSERVATION_SPAN_SEC = agent_payload.OBSERVATION_SPAN_SEC  # 60 s
+_VLM_CONFIDENCE_THRESHOLD = float(
+    os.environ.get('VLM_CONFIDENCE_THRESHOLD', '0.6')
+)
+
+# Demotion (REVIEW/MANUAL → SKIP) requires HIGHER confidence than promotion
+# (SKIP→REVIEW): a wrong demotion loses a real bird, while a wrong promotion
+# only costs human review time. Default 0.8; tune via VLM_DEMOTION_CONFIDENCE.
+_VLM_DEMOTION_CONFIDENCE = float(
+    os.environ.get('VLM_DEMOTION_CONFIDENCE', '0.8')
+)
+
+# Persistence thresholds for classify_window (tunable via env).
+# min_persist_frac: fraction of span samples that must carry a valid bird-sized
+# blob for REVIEW (full windows only; short spans fall back to min_bird_frames).
+_MIN_PERSIST_FRAC = float(os.environ.get('DARKWING_MIN_PERSIST_FRAC', '0.40'))
+# glare_persist_frac: fraction of span samples that must carry an implausibly
+# large blob for MANUAL.
+_GLARE_PERSIST_FRAC = float(os.environ.get('DARKWING_GLARE_PERSIST_FRAC', '0.30'))
+# min_bird_frames: minimum consecutive-ish frames with a valid bird blob to
+# count as a detection (fallback for short spans / unit tests).
+_MIN_BIRD_FRAMES = int(os.environ.get('DARKWING_MIN_BIRD_FRAMES', '2'))
 
 # Trace logging
 _TRACING_ENABLED = os.environ.get('DARKWING_TRACE_CLI', '').lower() in ('1', 'true', 'yes')
@@ -138,7 +159,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
 
     vlm_provider = os.environ.get('VLM_PROVIDER')
     # Ensure agent is typed for awaitable member access
-    vlm_agent: ai_agent.AIObservationAgent = agent  # type: ignore
+    vlm_agent: VLMClientAdapter = agent  # type: ignore
 
     # 1. enumerate windows, skip done (resume)
     hours = range(args.hours[0], args.hours[1] + 1) if args.hours else win.OBSERVATION_HOURS
@@ -317,17 +338,26 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             # Window exists but no bird → SKIP. Pass empty frames to classifier.
             frs = []
 
-        res = det.classify_window(frs, w, version=DETECTOR_VERSION, min_bird_frames=3)
+        res = det.classify_window(
+            frs, w, version=DETECTOR_VERSION, min_bird_frames=_MIN_BIRD_FRAMES,
+            min_persist_frac=_MIN_PERSIST_FRAC, glare_persist_frac=_GLARE_PERSIST_FRAC,
+        )
 
         # Phase 0: Binary LLM bird-presence check for uncertain SKIP verdicts.
-        # When classify_window returns SKIP but bird-sized blobs (>=400px²) were
-        # collected (meaning the bird appeared but may not have persisted for
-        # the full min_bird_frames threshold), ask the LLM a simple YES/NO
-        # question to resolve uncertainty before falling back to SKIP.
+        # When classify_window returns SKIP but bird-sized blobs (>=500px² with shape checks)
+        # were collected (meaning the bird appeared but may not have persisted for
+        # the full min_bird_frames=5 threshold), ask the LLM a binary YES/NO check
+        # to resolve uncertainty before falling back to SKIP.
+        # NOTE: Skip VLM promotion when the detector already determined the blob
+        # is a stationary artifact (glare reflection, nest debris). The VLM would
+        # see the same frames and might still say "bird present", but the detector's
+        # temporal analysis (centroid stability across frames) is more reliable for
+        # distinguishing fixed artifacts from moving birds.
         if (
             res.verdict is det.Verdict.SKIP
             and frs
             and vlm_provider
+            and "stationary blob artifact" not in (res.glare_reason or "")
             # Only trigger when some blobs were collected but didn't clear the
             # persistence threshold — indicating a potentially real bird with
             # brief/partial appearance.
@@ -352,26 +382,26 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                         "hour": w.hour,
                         "minute": w.minute,
                         "detector_version": res.detector_version,
+                        "max_blob_area": max(fr.max_blob_area for fr in frs),
                     }
                     # Lazy-init the VLM agent for the binary check.
                     if vlm_agent is None:
-                        try:
-                            vlm_agent = ai_agent.AIObservationAgent()
-                        except ValueError as exc:
-                            _trace(
-                                f"[BINARY CHECK] Window {w.window_id}: skipped "
-                                f"(VLM not configured: {exc})"
-                            )
-                            bird_present = False
-                        else:
-                            bird_present = await vlm_agent.detect_bird(frames_to_send, ctx)
-                    else:
-                        bird_present = await vlm_agent.detect_bird(frames_to_send, ctx)
-                    if bird_present:
-                        # Promote SKIP → REVIEW: a bird was confirmed present.
-                        # Re-classifying with min_bird_frames=3 would still yield SKIP
-                        # (that's why we got SKIP in the first place), so set the
-                        # verdict directly and use the earliest blob ts as detection time.
+                        vlm_agent = vlm_client_adapter
+                    try:
+                        bird_present, confidence = await vlm_agent.detect_bird(
+                            frames_to_send, ctx
+                        )
+                    except Exception as exc:
+                        _trace(
+                            f"[VLM ERROR] Window {w.window_id}: VLM check failed "
+                            f"{exc}"
+                        )
+                        continue
+
+                    if bird_present and confidence >= _VLM_CONFIDENCE_THRESHOLD:
+                        # Promote SKIP → REVIEW: VLM confirmed bird present with
+                        # sufficient confidence. Re-classifying would still yield
+                        # SKIP at min_bird_frames=5, so set verdict directly.
                         res.verdict = det.Verdict.REVIEW
                         earliest_ts = min(
                             (fr.ts_sec for fr in frs if fr.blobs), default=None
@@ -382,12 +412,96 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                         res.sample_count = len(frs)
                         _trace(
                             f"[BINARY CHECK] Window {w.window_id}: SKIP → REVIEW "
-                            f"(LLM confirmed bird present at {first_blob_ts:.1f}s)"
+                            f"(VLM confirmed at {first_blob_ts:.1f}s, conf={confidence:.2f})"
                         )
-                    else:
+                    elif not bird_present and confidence > 0.7:
                         _trace(
                             f"[BINARY CHECK] Window {w.window_id}: SKIP confirmed "
-                            f"(LLM found no bird)"
+                            f"(VLM found no bird at {first_blob_ts:.1f}s, "
+                            f"conf={confidence:.2f})"
+                        )
+                    else:
+                        # Uncertain or failed — don't promote, keep SKIP
+                        _trace(
+                            f"[BINARY CHECK] Window {w.window_id}: SKIP retained "
+                            f"(uncertain VLM response, conf={confidence:.2f})"
+                        )
+
+        # Phase 1: VLM demotion of REVIEW/MANUAL → SKIP (false-positive cleanup).
+        # Classical CV plateaus at F1≈0.61 / exact≈0.68, with residual FPs that
+        # are persistent static scene features (tower opening, wall shadows).
+        # When the classical detector still flagged a window, ask the binary
+        # VLM "is a bird actually present?" If the VLM confidently says NO,
+        # demote to SKIP. This FAILS CLOSED: any VLM error, timeout, uncertainty,
+        # or "bird present" answer keeps REVIEW/MANUAL (never silently drops a
+        # possible bird). Demotion requires a *higher* confidence than promotion
+        # because a wrong demotion loses data, whereas a wrong promotion only
+        # costs human review time.
+        if (
+            res.verdict in (det.Verdict.REVIEW, det.Verdict.MANUAL)
+            and frs
+            and vlm_provider
+            and any(fr.blobs for fr in frs)
+        ):
+            first_blob_ts = min((fr.ts_sec for fr in frs if fr.blobs), default=None)
+            if first_blob_ts is not None:
+                frames_to_send = agent_payload.extract_motion_frames(
+                    Path(args.source_path),
+                    frs,
+                    fps=src.fps,
+                    first_detection_ts=first_blob_ts,
+                    span_sec=60.0,
+                    max_frames=3,
+                )
+                if frames_to_send:
+                    ctx = {
+                        "tower": w.tower,
+                        "date": w.date,
+                        "hour": w.hour,
+                        "minute": w.minute,
+                        "detector_version": res.detector_version,
+                        "max_blob_area": max(fr.max_blob_area for fr in frs),
+                    }
+                    if vlm_agent is None:
+                        vlm_agent = vlm_client_adapter
+                    try:
+                        bird_present, confidence = await vlm_agent.detect_bird(
+                            frames_to_send, ctx
+                        )
+                    except Exception as exc:
+                        # Fail closed → keep REVIEW/MANUAL
+                        bird_present = None
+                        _trace(
+                            f"[VLM ERROR] Window {w.window_id}: demotion check "
+                            f"failed ({exc}); keeping {res.verdict.value}"
+                        )
+
+                    if bird_present is False and confidence >= _VLM_DEMOTION_CONFIDENCE:
+                        prior = res.verdict.value
+                        res.verdict = det.Verdict.SKIP
+                        res.first_detection_ts = None
+                        res.max_blob_area = 0
+                        res.sample_count = len(frs)
+                        res.spot_check_due = False
+                        res.glare_reason = (
+                            f"VLM demoted {prior}→skip (no bird, conf={confidence:.2f})"
+                        )
+                        _trace(
+                            f"[BINARY CHECK] Window {w.window_id}: {prior} → SKIP "
+                            f"(VLM found no bird at {first_blob_ts:.1f}s, "
+                            f"conf={confidence:.2f})"
+                        )
+                    elif bird_present is True:
+                        _trace(
+                            f"[BINARY CHECK] Window {w.window_id}: {res.verdict.value} "
+                            f"retained (VLM confirmed bird at {first_blob_ts:.1f}s, "
+                            f"conf={confidence:.2f})"
+                        )
+                    else:
+                        # Uncertain or failed — keep REVIEW/MANUAL (fail closed)
+                        _trace(
+                            f"[BINARY CHECK] Window {w.window_id}: "
+                            f"{res.verdict.value} retained (uncertain VLM response)"
                         )
 
         # Phase 2: Backfill to refine first-detection timestamp (hybrid approach)
@@ -472,11 +586,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
             if frames_to_send:
                 # 2. Agent Proposal (Phase 2)
                 if agent is None:
-                    try:
-                        agent = ai_agent.AIObservationAgent()
-                    except ValueError as exc:
-                        print(f"✗ Failed to initialize VLM agent: {exc}", file=sys.stderr)
-                        return 1
+                    agent = vlm_client_adapter
                     vlm_agent = agent
                 # context_metadata maps to agent.propose_observation's context_metadata arg
                 ctx = {
