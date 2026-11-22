@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import enum
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from typing import Iterable, Iterator, List, Optional, Sequence, Tuple
@@ -124,6 +125,13 @@ class FrameResult:
     max_blob_area: int = 0
     fg_frac: float = 0.0       # fraction of ROI that is real foreground (255)
     shadow_frac: float = 0.0   # fraction of ROI flagged as MOG2 shadow (127)
+    # Per-blob shape metrics (solidity, circularity, aspect_ratio), parallel to blobs.
+    # NOTE: measured on the 06/15/2026 validation set — solidity/circularity do NOT
+    # cleanly separate real birds from static-feature false positives (heavy overlap:
+    # real-bird solidity 0.40–0.83 vs FP 0.45–0.92). Kept for diagnostics/future use;
+    # NOT used as a classification filter (a gate would drop real birds like the
+    # low-solidity v7/1540 bird while keeping high-solidity FPs such as v2/0920).
+    blob_metrics: List[Tuple[float, float, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -156,6 +164,36 @@ def _build_roi(w: int, h: int, roi: Sequence[float]) -> np.ndarray:
     mask = np.zeros((h, w), np.uint8)
     mask[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)] = 255
     return mask
+
+
+def _extract_blobs_from_mask(
+    mask: np.ndarray, min_area: int
+) -> Tuple[List[Tuple[int, int, int, int, int]], int, List[Tuple[float, float, float]]]:
+    """Extract blobs + per-blob shape metrics from a binary foreground mask.
+
+    Returns ``(blobs, max_blob_area, metrics)`` where each blob is
+    ``(x, y, w, h, area)`` and ``metrics`` is a parallel list of
+    ``(solidity, circularity, aspect_ratio)``.
+    """
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    blobs: List[Tuple[int, int, int, int, int]] = []
+    max_area = 0
+    metrics: List[Tuple[float, float, float]] = []
+    for c in cnts:
+        a = cv2.contourArea(c)
+        if a < min_area:
+            continue
+        x, y, w, h = cv2.boundingRect(c)
+        blobs.append((x, y, w, h, int(a)))
+        max_area = max(max_area, int(a))
+        hull = cv2.convexHull(c)
+        hull_area = cv2.contourArea(hull)
+        solidity = float(a) / hull_area if hull_area > 0 else 0.0
+        perim = cv2.arcLength(c, True)
+        circularity = (4.0 * math.pi * float(a)) / (perim * perim) if perim > 0 else 0.0
+        aspect = float(max(w, h)) / max(min(w, h), 1)
+        metrics.append((solidity, circularity, aspect))
+    return blobs, max_area, metrics
 
 
 class Detector:
@@ -359,6 +397,7 @@ class Detector:
         h, w = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         fg = self._fgbg.apply(gray)
+
         roi = self._roi
         roi_px = int(roi.sum()) // 255
         if roi_px == 0:
@@ -368,25 +407,14 @@ class Detector:
         shadow = (fg == 127) & (roi == 255)
         real = (fg == 255) & (roi == 255)
         real = cv2.morphologyEx(real.astype(np.uint8), cv2.MORPH_OPEN, self._kernel)
-
-        cnts, _ = cv2.findContours(real, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        all_areas = sorted([int(cv2.contourArea(c)) for c in cnts], reverse=True)
-        blobs: List[Tuple[int, int, int, int, int]] = []
-        max_area = 0
-        for c in cnts:
-            a = cv2.contourArea(c)
-            if a < self.min_area:
-                continue
-            x, y, w_b, hh = cv2.boundingRect(c)
-            blobs.append((x, y, w_b, hh, int(a)))
-            max_area = max(max_area, int(a))
+        blobs, max_area, metrics = _extract_blobs_from_mask(real, self.min_area)
 
         # FALLBACK: MOG2 often misses still birds (they blend into wall).
         # Use dark-threshold detection when MOG2 finds nothing in the ROI.
         if not blobs:
             _trace(f"MOG2 found 0 blobs at sample={sample_index} ts={ts_sec:.1f}s, "
                    f"trying dark-threshold detection")
-            thr_blobs, thr_area = threshold_foreground(
+            thr_blobs, thr_area, thr_metrics = threshold_foreground(
                 frame, roi, self.dark_threshold, self.min_area
             )
             if thr_blobs:
@@ -394,6 +422,22 @@ class Detector:
                        f"max_area={thr_area:.0f}")
                 blobs = thr_blobs
                 max_area = thr_area
+                metrics = thr_metrics
+                # Fallback mask comes from threshold_foreground; rebuild it so
+                # fg_frac/shadow_frac stay consistent with the returned blobs.
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if self.dark_threshold is None:  # reuse adaptive threshold logic
+                    roi_pixels = gray[roi == 255]
+                    if len(roi_pixels) > 0:
+                        roi_mean = float(np.mean(roi_pixels))
+                        roi_std = float(np.std(roi_pixels))
+                        thr = max(roi_mean - 1.5 * roi_std, 0.0)
+                    else:
+                        thr = 50.0
+                else:
+                    thr = float(self.dark_threshold)
+                real = ((gray < thr) & (roi == 255)).astype(np.uint8) * 255
+                real = cv2.morphologyEx(real, cv2.MORPH_OPEN, _DARK_OPEN_KERNEL)
 
         # Include blob coordinates in trace for debugging false positives
         blob_details = ""
@@ -401,9 +445,7 @@ class Detector:
             blob_details = f" blobs=[{', '.join(f'({x},{y},{w},{h},{a})' for x,y,w,h,a in blobs)}]"
         _trace(
             f"sample={sample_index} ts={ts_sec:.1f}s "
-            f"frame={w}x{h} roi_px={roi_px} contours={len(cnts)} "
-            f"all_areas={all_areas[:10]} min_area={self.min_area} "
-            f"kept={len(blobs)} max_blob_area={max_area}{blob_details} "
+            f"frame={w}x{h} roi_px={roi_px} kept={len(blobs)} max_blob_area={max_area}{blob_details} "
             f"fg_frac={float(real.sum()) / roi_px:.4f} "
             f"shadow_frac={float(shadow.sum()) / roi_px:.4f}"
         )
@@ -415,6 +457,7 @@ class Detector:
             max_blob_area=max_area,
             fg_frac=float(real.sum()) / roi_px,
             shadow_frac=float(shadow.sum()) / roi_px,
+            blob_metrics=metrics,
         )
 
 
@@ -424,7 +467,10 @@ def classify_window(
     glare_max_area: int = DEFAULT_GLARE_MAX_AREA,
     min_area: int = DEFAULT_MIN_AREA,
     min_sample_count: int = 20,
-    min_bird_frames: int = 3,
+    min_bird_frames: int = 2,
+    min_persist_frac: float = 0.40,
+    glare_persist_frac: float = 0.30,
+    persistence_min_samples: int = 100,
     version: str = "detector-v1",
 ) -> WindowResult:
     """Aggregate per-frame results into a three-bucket verdict for one window.
@@ -441,24 +487,44 @@ def classify_window(
     Motion tracking distinguishes a moving shadow sweep (glare) from a
     stationary nest/debris: a large blob that stays in roughly the same
     position across frames is treated as a stationary object, not glare.
-    A minimum sample count is required before a window can be REVIEW. With
-    only a few frames (e.g. the tail end of a clip), noise can masquerade as
-    a bird detection — so those windows are SKIP.
 
-    A bird-sized blob must also persist across at least ``min_bird_frames``
-    frames to count as a detection. A single-frame blob is usually a
-    compression artifact or transient noise rather than a bird.
+    Persistence gate (full-length windows only). For real observation spans
+    (``len(frames) >= persistence_min_samples``) a genuine bird is present
+    throughout most of the span and genuine glare/shadow persists for many
+    frames. Transient MOG2 spikes and sparse intermittent blobs are noise, not
+    birds or glare. Both the bird (REVIEW) decision and the glare (MANUAL)
+    decision require the relevant detection in ``min_persist_frac`` /
+    ``glare_persist_frac`` of the samples respectively. Short spans (unit tests,
+    clip tails) fall back to ``min_bird_frames`` alone so small-window
+    semantics are preserved.
+
+    (Empirically, on the 06/15/2026 validation set, attempts to recover the
+    sparse real birds — v1/0800, v1/0820, v13/2100, detected in only 2-8
+    non-consecutive frames — via occupancy suppression or short-burst rules
+    admitted persistent static-feature false positives and were net negative;
+    the fraction-of-span gate below is the best-known balance.)
     """
     has_bird = False
     first_ts: Optional[float] = None
     max_area = 0
     glare_reason = ""
     valid_bird_frames = 0
+    large_blob_frames = 0
+
+    # Persistence thresholds: fraction-of-span for full windows, else min_bird_frames.
+    # Birds and glare can use different fractions; default glare to bird fraction.
+    if len(frames) >= persistence_min_samples:
+        min_bird_persist = max(min_bird_frames, int(round(len(frames) * min_persist_frac)))
+        min_glare_persist = max(min_bird_frames, int(round(len(frames) * glare_persist_frac)))
+    else:
+        min_bird_persist = min_bird_frames
+        min_glare_persist = min_bird_frames
 
     for fr in frames:
         max_area = max(max_area, fr.max_blob_area)
 
         if fr.max_blob_area >= glare_max_area:
+            large_blob_frames += 1
             if not glare_reason:
                 glare_reason = f"implausible blob area {fr.max_blob_area}px^2"
         elif fr.blobs and fr.max_blob_area >= 500:  # Bird-sized blob threshold (enhanced)
@@ -483,13 +549,11 @@ def classify_window(
                 if first_ts is None:
                     first_ts = fr.ts_sec
 
-    if valid_bird_frames >= min_bird_frames:
+    if valid_bird_frames >= min_bird_persist:
         has_bird = True
     else:
         has_bird = False
         first_ts = None
-        if not glare_reason and valid_bird_frames > 0:
-            glare_reason = f"insufficient persistent birds ({valid_bird_frames} < {min_bird_frames})"
 
     # Stationary blob detection: a blob that stays within _STATIONARY_SPREAD_PX
     # pixels of its average centroid across frames is treated as a fixed artifact
@@ -501,25 +565,23 @@ def classify_window(
             glare_reason = "stationary blob artifact (not a moving bird)"
 
     # Three-bucket logic:
-    # - Large blob (>= glare_max_area) → MANUAL (shadow sweep / glare)
-    # - Bird-sized blob (>= 400, < glare_max_area) + enough samples → REVIEW
-    # - Bird-sized blob but too few samples → SKIP
+    # - Large blob (>= glare_max_area) that PERSISTS → MANUAL (shadow sweep / glare)
+    # - Large blob that is only transient → not real glare (fall through to bird logic)
+    # - Any bird-sized blob (+ enough samples) → REVIEW (human confirms)
     # - Nothing → SKIP
-    if max_area >= glare_max_area:
-        verdict = Verdict.MANUAL   # Implausibly large = glare/shadow, needs human review
+    if max_area >= glare_max_area and large_blob_frames >= min_glare_persist:
+        verdict = Verdict.MANUAL   # Persistent implausibly large blob = glare/shadow
         spot_check = True
     elif has_bird and len(frames) >= min_sample_count:
-        verdict = Verdict.REVIEW   # Bird-sized blob(s) detected with enough samples
+        verdict = Verdict.REVIEW   # Bird-sized blob(s) detected — human confirms
         spot_check = True
-    elif has_bird:
-        # Bird-sized blob detected but too few samples to trust it (e.g. tail of clip)
-        verdict = Verdict.SKIP
-        spot_check = False
-        glare_reason = (glare_reason + "; " if glare_reason else "") + \
-                       f"insufficient samples ({len(frames)} < {min_sample_count})"
     else:
-        verdict = Verdict.SKIP     # No blobs at all
+        verdict = Verdict.SKIP     # No candidate blobs at all
         spot_check = False
+        if max_area >= glare_max_area and large_blob_frames < min_glare_persist:
+            glare_reason = (glare_reason + "; " if glare_reason else "") + \
+                           f"transient large blob ({large_blob_frames} < {min_glare_persist})"
+
 
     _trace(
         f"classify_window window={window.window_id} frames={len(frames)} "
@@ -567,7 +629,7 @@ def threshold_foreground(
     roi: np.ndarray,
     dark_threshold: int | None = None,
     min_area: int = 250,
-) -> Tuple[List[Tuple[int, int, int, int, int]], int]:
+) -> Tuple[List[Tuple[int, int, int, int, int]], int, List[Tuple[float, float, float]]]:
     """Detect foreground using adaptive dark-threshold on grayscale.
 
     Birds against a chimney wall are typically darker than the background.
@@ -576,7 +638,8 @@ def threshold_foreground(
     Uses an adaptive threshold based on ROI statistics (mean - 1.5*std) by
     default so it adapts to changing lighting instead of a fixed global value.
 
-    Returns (blobs, max_blob_area) where each blob is (x, y, w, h, area).
+    Returns (blobs, max_blob_area, metrics) where each blob is (x, y, w, h, area)
+    and ``metrics`` is a parallel list of (solidity, circularity, aspect_ratio).
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -609,6 +672,7 @@ def threshold_foreground(
 
     blobs: List[Tuple[int, int, int, int, int]] = []
     max_area = 0
+    metrics: List[Tuple[float, float, float]] = []  # (solidity, circularity, aspect)
     for c in cnts:
         a = cv2.contourArea(c)
         if a < min_area:
@@ -616,9 +680,16 @@ def threshold_foreground(
         x, y, w, hh = cv2.boundingRect(c)
         blobs.append((x, y, w, hh, int(a)))
         max_area = max(max_area, int(a))
+        hull = cv2.convexHull(c)
+        hull_area = cv2.contourArea(hull)
+        solidity = float(a) / hull_area if hull_area > 0 else 0.0
+        perim = cv2.arcLength(c, True)
+        circularity = (4.0 * math.pi * float(a)) / (perim * perim) if perim > 0 else 0.0
+        aspect = float(max(w, hh)) / max(min(w, hh), 1)
+        metrics.append((solidity, circularity, aspect))
 
     # Large blobs are NOT rejected here. classify_window() uses motion
     # analysis to distinguish a stationary nest/debris blob (REVIEW) from a
     # moving shadow sweep (MANUAL). Rejecting them here would discard real
     # bird detections that coexist with a large stationary object.
-    return blobs, max_area
+    return blobs, max_area, metrics

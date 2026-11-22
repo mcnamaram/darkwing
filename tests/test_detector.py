@@ -8,6 +8,7 @@ from pathlib import Path
 
 from darkwing.detector import (
     Detector,
+    FrameResult,
     Verdict,
     classify_window,
     iter_frames,
@@ -46,35 +47,36 @@ def test_review_on_moving_blob():
     assert res.spot_check_due is True
 
 
-def test_manual_on_glare_hour_with_blob():
-    d = Detector()
-    frames = []
-    for i in range(60):
-        f = _frame()
-        if i == 30:
-            # huge white rectangle -> max_blob_area > glare_max_area
-            f[10:170, 10:310] = 220
-        frames.append(d.process_frame(f, i))
+def _large_blob_frame(i: int, area: int = 10000):
+    """Construct a FrameResult with one implausibly-large blob."""
+    return FrameResult(sample_index=i, ts_sec=float(i),
+                       blobs=[(10, 10, 100, 100, area)], max_blob_area=area)
+
+
+def test_manual_on_persistent_large_blob():
+    """A large blob PERSISTING across the span is real glare -> MANUAL."""
+    frames = [_large_blob_frame(i) if i >= 10 else FrameResult(i, float(i))
+              for i in range(60)]
     w = WindowId(tower=3, date="06/15/2026", hour=12, minute=0)
     res = classify_window(frames, w)
-    assert res.verdict is Verdict.MANUAL  # Implausibly large blob = glare/shadow
+    assert res.verdict is Verdict.MANUAL  # Persistent implausibly large blob = glare/shadow
     assert "implausible" in res.glare_reason
     assert res.spot_check_due is True
 
 
-def test_manual_on_implausible_blob():
-    d = Detector()
-    frames = []
-    for i in range(60):
-        f = _frame()
-        if i == 10:
-            # huge white rectangle -> max_blob_area > glare_max_area
-            f[10:170, 10:310] = 220
-        frames.append(d.process_frame(f, i, float(i)))
+def test_transient_spike_is_not_glare():
+    """A single-frame huge blob spike is MOG2/compression noise, not real glare.
+
+    Matches the real-world v1/0840 case: one frame with a 21kpx² blob that
+    never recurs. The oracle labels this window SKIP, so the detector must
+    not promote a transient spike to MANUAL.
+    """
+    frames = [_large_blob_frame(i) if i == 30 else FrameResult(i, float(i))
+              for i in range(60)]
     w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
     res = classify_window(frames, w)
-    assert res.verdict is Verdict.MANUAL
-    assert "implausible" in res.glare_reason
+    assert res.verdict is Verdict.SKIP
+    assert "transient large blob" in res.glare_reason
 
 
 def test_iter_frames_decimates_and_timestamps():
@@ -136,7 +138,7 @@ def test_threshold_fallback_detects_stationary_bird():
     # Test threshold_foreground directly on a frame with a dark bird
     d._ensure_roi(f1)
     assert d._roi is not None
-    blobs, max_area = threshold_foreground(
+    blobs, max_area, _metrics = threshold_foreground(
         f1, d._roi, d.dark_threshold, d.min_area
     )
     # The bird should be detected as a dark object against wall variation
@@ -306,10 +308,11 @@ def test_fg_frac_uses_subtraction_not_division():
     assert 0.0 <= fr.fg_frac <= 1.0
 
 def test_persistence_requirement_single_frame_is_skip():
-    """Single-frame bird-sized blob should not trigger REVIEW verdict.
+    """Single-frame bird-sized blob yields SKIP (below min_bird_frames=2).
 
-    With min_bird_frames=3 (default), a transient blob appearing in
-    only one frame is treated as noise/artifact, not a bird.
+    A transient blob appearing in only one frame is treated as noise/artifact,
+    not a bird. The detector only promotes to REVIEW once a bird-sized blob
+    appears in at least min_bird_frames frames.
     """
     import cv2
     import numpy as np
@@ -323,13 +326,16 @@ def test_persistence_requirement_single_frame_is_skip():
         frames.append(d.process_frame(f, i, float(i)))
     w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
     res = classify_window(frames, w)
-    assert res.verdict is not Verdict.MANUAL
     assert res.verdict is Verdict.SKIP, f"Expected SKIP for single-frame blob, got {res.verdict}"
     assert res.first_detection_ts is None
 
 
-def test_persistence_requirement_two_frames_still_skip():
-    """Two persistent bird-sized frames (< min_bird_frames=3) still yield SKIP."""
+def test_persistence_requirement_two_frames_is_review():
+    """Two persistent bird-sized frames (>= min_bird_frames=2) yield REVIEW.
+
+    Safety-first policy: any short burst of bird-sized blobs → REVIEW so a
+    human can confirm, rather than silently dropping a fast-moving swift.
+    """
     import cv2
     import numpy as np
 
@@ -343,11 +349,12 @@ def test_persistence_requirement_two_frames_still_skip():
         frames.append(d.process_frame(f, i, float(i)))
     w = WindowId(tower=3, date="06/15/2026", hour=7, minute=0)
     res = classify_window(frames, w)
-    assert res.verdict is Verdict.SKIP, f"Expected SKIP for 2-frame blob, got {res.verdict}"
+    assert res.verdict is Verdict.REVIEW, f"Expected REVIEW for 2-frame blob, got {res.verdict}"
+    assert res.first_detection_ts is not None
 
 
 def test_persistence_requirement_three_frames_review():
-    """Three persistent bird-sized frames (>= min_bird_frames=3) yield REVIEW."""
+    """Three persistent bird-sized frames (>= min_bird_frames=2) yield REVIEW."""
     import cv2
     import numpy as np
 
