@@ -60,10 +60,12 @@ async def test_full_pipeline_with_mocked_ollama(ollama_env, tmp_path):
         hour=6,
         minutes_past_hour=0,
         num_adults=2,
+        num_adults_other="0",
         nesting_stage="nst",
         bill_use=["fd"],
         flights=["in"],
         num_near_nest=1,
+        num_near_nest_other="0",
         awake="y",
         notes="",
     )

@@ -26,6 +26,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import cv2
@@ -214,7 +215,7 @@ class Detector:
         glare_max_area: int = DEFAULT_GLARE_MAX_AREA,
         morph_kernel: Tuple[int, int] = DEFAULT_MORPH_KERNEL,
         history: int = 500,
-        var_threshold: int = 16,
+        var_threshold: float = 16.0,
         dark_threshold: int | None = DEFAULT_DARK_THRESHOLD,
     ) -> None:
         self.roi_frac = tuple(roi)
@@ -437,7 +438,10 @@ class Detector:
                 else:
                     thr = float(self.dark_threshold)
                 real = ((gray < thr) & (roi == 255)).astype(np.uint8) * 255
-                real = cv2.morphologyEx(real, cv2.MORPH_OPEN, _DARK_OPEN_KERNEL)
+                dark_open_kernel = cv2.getStructuringElement(
+                    cv2.MORPH_ELLIPSE, _DARK_OPEN_KERNEL
+                )
+                real = cv2.morphologyEx(real, cv2.MORPH_OPEN, dark_open_kernel)
 
         # Include blob coordinates in trace for debugging false positives
         blob_details = ""
@@ -527,13 +531,13 @@ def classify_window(
             large_blob_frames += 1
             if not glare_reason:
                 glare_reason = f"implausible blob area {fr.max_blob_area}px^2"
-        elif fr.blobs and fr.max_blob_area >= 500:  # Bird-sized blob threshold (enhanced)
+        elif fr.blobs and fr.max_blob_area >= min_area:  # Bird-sized blob threshold
             # Analyze blob characteristics to distinguish birds from artifacts
             has_valid_blobs = False
             for blob in fr.blobs:
                 x, y, w, h, area = blob
                 # Size check: filter out very small or edge-case small blobs
-                if area < 500:
+                if area < min_area:
                     continue
                 # Aspect ratio check: birds are relatively compact shapes
                 # Extremely elongated blobs are often shadows or moving foliage

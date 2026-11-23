@@ -164,7 +164,7 @@ def test_backfill_refines_timestamp():
 
     fps = 25.0
     w, h = 320, 180
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # pyright: ignore[reportAttributeAccessIssue]
     writer = cv2.VideoWriter(video_path, fourcc, fps, (w, h))
 
     # Frames 0-249: clean wall

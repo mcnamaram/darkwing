@@ -19,6 +19,7 @@ from pydantic_ai import Agent, NativeOutput, ModelRetry, RunContext
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai import messages
+from pydantic_ai.messages import UserContent
 
 import logfire
 from darkwing.schema import ObservationRecord
@@ -86,7 +87,6 @@ observation_agent = Agent(
     name='chimney_swift_observation_agent',
     instructions=SYSTEM_PROMPT,
     output_type=NativeOutput(ObservationRecord),
-    retries={'output': 2, 'invalid_json': 2},
 )
 
 # Agent for binary bird presence check
@@ -98,12 +98,11 @@ binary_agent = Agent(
     name='binary_bird_presence_agent',
     instructions=BINARY_SYSTEM_PROMPT,
     output_type=NativeOutput(BirdDetection),
-    retries={'output': 1, 'invalid_json': 1},
 )
 
 # Output validators (business logic at boundary)
 @observation_agent.output_validator
-async def validate_observation_logic(ctx: RunContext[None], output: ObservationRecord) -> ObservationRecord:
+async def validate_observation_logic(output: ObservationRecord) -> ObservationRecord:
     """Enforce ornithological invariants that the VLM might miss."""
     # 1. If num_adults > 0, at least one flight code must make sense
     if output.num_adults > 0 and not output.flights:
@@ -121,7 +120,7 @@ async def validate_observation_logic(ctx: RunContext[None], output: ObservationR
 VLM_CONFIDENCE_THRESHOLD = float(os.environ.get('VLM_CONFIDENCE_THRESHOLD', '0.6'))
 
 @binary_agent.output_validator
-async def validate_bird_detection(ctx: RunContext[None], output: BirdDetection) -> BirdDetection:
+async def validate_bird_detection(output: BirdDetection) -> BirdDetection:
     """Sanity-check the binary detection.
 
     Reject low-confidence positive detections (bird_present=True below threshold),
@@ -142,7 +141,7 @@ def _build_user_prompt(frames: List[bytes], context: Dict, label: str) -> list:
     sequence of UserContent items (BinaryImage, TextContent, ImageUrl, etc.).
     The keyword argument `prompt=` is no longer accepted — pass positionally.
     """
-    parts = [messages.TextContent(content=f"{label} Window context: {json.dumps(context)}")]
+    parts: List[UserContent] = [messages.TextContent(content=f"{label} Window context: {json.dumps(context)}")]
     for frame in frames:
         parts.append(messages.BinaryImage(data=frame, media_type="image/jpeg"))
     return parts
@@ -188,34 +187,76 @@ def propose_observation(frames: List[bytes], context: Dict) -> ObservationRecord
         # Fail-safe: return minimal valid record with context defaults
         return _fallback_observation(context)
 
-def _fallback_observation(context: Dict) -> ObservationRecord:
-    """Construct a minimal valid record when VLM fails."""
+def _validate_context(context: Dict) -> Dict:
+    """Validate and normalize context fields before building a fallback record.
+
+    Returns a dict with safe defaults for any missing or invalid fields, so the
+    resulting ObservationRecord can always be constructed without raising
+    ValidationError.
+    """
     from datetime import datetime
+
+    tower = context.get('tower', 1)
+    try:
+        tower = int(tower)
+    except (ValueError, TypeError):
+        tower = 1
+    tower = max(1, min(4, tower))
+
     date = context.get('date', datetime.now().strftime('%m/%d/%Y'))
+    if not isinstance(date, str):
+        date = datetime.now().strftime('%m/%d/%Y')
+
     hour = context.get('hour', 12)
+    try:
+        hour = int(hour)
+    except (ValueError, TypeError):
+        hour = 12
+    hour = max(6, min(21, hour))
+
     minute = context.get('minute', 0)
+    try:
+        minute = int(minute)
+    except (ValueError, TypeError):
+        minute = 0
+
+    return {'tower': tower, 'date': date, 'hour': hour, 'minute': minute}
+
+
+def _fallback_observation(context: Dict) -> ObservationRecord:
+    """Construct a minimal valid record when VLM fails.
+
+    num_adults=0 always pairs with awake='nap' ("No adults present").
+    """
+    ctx = _validate_context(context)
+    from datetime import datetime
+    date = ctx['date'] or datetime.now().strftime('%m/%d/%Y')
+    hour = ctx['hour']
+    minute = ctx['minute']
     # Snap minute to 0, 20, 40
     snapped = min([0, 20, 40], key=lambda m: abs(m - minute))
     return ObservationRecord(
-        tower=context.get('tower', 1),
+        tower=ctx['tower'],
         date_str=date,
         hour=hour,
         minutes_past_hour=snapped,
         num_adults=0,
+        num_adults_other=None,
         nesting_stage='no',
         bill_use=['na'],
         flights=['non'],
         num_near_nest=0,
+        num_near_nest_other=None,
         awake='nap',
         notes='VLM failed; auto-generated fallback',
     )
 
 # Factory functions (backwards compatible with existing code)
-def get_adapter() -> Agent:
+def get_adapter() -> Agent[object, ObservationRecord]:
     """Factory: returns observation proposal agent — replaces AIObservationAgent."""
     return observation_agent
 
-def create_agent() -> Agent:
+def create_agent() -> Agent[object, ObservationRecord]:
     """Factory: returns an observation proposal agent instance (alias for get_adapter)."""
     return get_adapter()
 

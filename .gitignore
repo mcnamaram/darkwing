@@ -1,7 +1,7 @@
 # Python / Language specific
-*.py[c]
+*.py[cod]
 __pycache__/
-*.py[O]CF
+
 build/
 develop-eggs/
 dist/

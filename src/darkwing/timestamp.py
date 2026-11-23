@@ -31,7 +31,7 @@ def extract_video_start_time(video_path: Path) -> Optional[datetime.datetime]:
 def _extract_from_ocr(video_path: Path) -> Optional[datetime.datetime]:
     """Extract timestamp from burned-in overlay using OCR."""
     try:
-        import pytesseract
+        import pytesseract  # type: ignore
     except ImportError:
         return None
 

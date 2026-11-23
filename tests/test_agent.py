@@ -116,10 +116,12 @@ async def test_vlm_client_adapter_propose_observation(monkeypatch):
         hour=14,
         minutes_past_hour=20,
         num_adults=5,
+        num_adults_other="0",
         nesting_stage="nst",
         bill_use=["fd"],
         flights=["in"],
         num_near_nest=2,
+        num_near_nest_other="0",
         awake="y",
         notes="Test observation",
     )
@@ -145,8 +147,7 @@ async def test_vlm_client_adapter_propose_observation(monkeypatch):
         assert record.nesting_stage == "nst"
 
 
-@pytest.mark.asyncio
-async def test_detect_bird_presence_service(monkeypatch):
+def test_detect_bird_presence_service(monkeypatch):
     """detect_bird_presence service function returns boolean."""
     monkeypatch.setenv("VLM_BASE_URL", "http://test.example.com/v1")
     monkeypatch.setenv("VLM_MODEL", "test-model")
@@ -160,8 +161,7 @@ async def test_detect_bird_presence_service(monkeypatch):
     assert isinstance(result, bool)
 
 
-@pytest.mark.asyncio
-async def test_propose_observation_service(monkeypatch):
+def test_propose_observation_service(monkeypatch):
     """propose_observation service function returns ObservationRecord."""
     monkeypatch.setenv("VLM_BASE_URL", "http://test.example.com/v1")
     monkeypatch.setenv("VLM_MODEL", "test-model")

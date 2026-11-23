@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from typing import cast
 
 import cv2
 import numpy as np
@@ -94,7 +95,7 @@ def test_downsample_preserves_order():
 
 def test_extract_motion_frames_no_fps():
     """Mutant: Early return when fps is None or >= 0."""
-    assert extract_motion_frames(Path("/tmp/test.mp4"), [], fps=None) == []
+    assert extract_motion_frames(Path("/tmp/test.mp4"), [], fps=cast(float, None)) == []
     assert extract_motion_frames(Path("/tmp/test.mp4"), [], fps=25.0) == []
 
 

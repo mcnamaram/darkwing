@@ -19,7 +19,7 @@ from darkwing.form_submit import submit_csv_records
 from darkwing import detector as det
 from darkwing import windows as win
 from darkwing.frames import open_source
-from darkwing.agent import vlm_client_adapter
+from darkwing.agent import VLMClientAdapter
 from darkwing import agent_payload
 from darkwing import timestamp as ts_mod
 import asyncio
@@ -159,7 +159,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
 
     vlm_provider = os.environ.get('VLM_PROVIDER')
     # Ensure agent is typed for awaitable member access
-    vlm_agent: VLMClientAdapter = agent  # type: ignore
+    vlm_agent: Optional[VLMClientAdapter] = agent
 
     # 1. enumerate windows, skip done (resume)
     hours = range(args.hours[0], args.hours[1] + 1) if args.hours else win.OBSERVATION_HOURS
@@ -241,7 +241,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
     else:
         offset_seconds = 0
 
-    if source_label:
+    if video_start:
         print(f"Video start time extracted: {video_start.strftime('%H:%M:%S')} "
               f"(via {source_label}); clip_start_hour={clip_start_hour}; "
               f"offset_seconds={offset_seconds:+.1f} (subtracted; frames before "
@@ -370,7 +370,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                 frames_to_send = agent_payload.extract_motion_frames(
                     Path(args.source_path),
                     frs,
-                    fps=src.fps,
+                    fps=float(src.fps or 0.0),
                     first_detection_ts=first_blob_ts,
                     span_sec=60.0,
                     max_frames=3,
@@ -386,17 +386,27 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                     }
                     # Lazy-init the VLM agent for the binary check.
                     if vlm_agent is None:
-                        vlm_agent = vlm_client_adapter
-                    try:
-                        bird_present, confidence = await vlm_agent.detect_bird(
-                            frames_to_send, ctx
-                        )
-                    except Exception as exc:
-                        _trace(
-                            f"[VLM ERROR] Window {w.window_id}: VLM check failed "
-                            f"{exc}"
-                        )
-                        continue
+                        vlm_agent = agent
+                    # Guard against vlm_agent being None to avoid AttributeError
+                    if vlm_agent is not None:
+                        try:
+                            bird_present, confidence = await vlm_agent.detect_bird(
+                                frames_to_send, ctx
+                            )
+                        except Exception as exc:
+                            _trace(
+                                f"[VLM ERROR] Window {w.window_id}: VLM check failed "
+                                f"{exc}"
+                            )
+                            # Do NOT continue here — let the window proceed to Phase 1
+                            # (demotion) and Phase 2 (backfill). A transient VLM failure
+                            # should not silently drop downstream processing.
+                            bird_present = None
+                            confidence = 0.0
+                    else:
+                        # If no VLM agent is available, skip detection
+                        bird_present = None
+                        confidence = 0.0
 
                     if bird_present and confidence >= _VLM_CONFIDENCE_THRESHOLD:
                         # Promote SKIP → REVIEW: VLM confirmed bird present with
@@ -414,7 +424,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                             f"[BINARY CHECK] Window {w.window_id}: SKIP → REVIEW "
                             f"(VLM confirmed at {first_blob_ts:.1f}s, conf={confidence:.2f})"
                         )
-                    elif not bird_present and confidence > 0.7:
+                    elif not bird_present and confidence > _VLM_CONFIDENCE_THRESHOLD:
                         _trace(
                             f"[BINARY CHECK] Window {w.window_id}: SKIP confirmed "
                             f"(VLM found no bird at {first_blob_ts:.1f}s, "
@@ -448,7 +458,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                 frames_to_send = agent_payload.extract_motion_frames(
                     Path(args.source_path),
                     frs,
-                    fps=src.fps,
+                    fps=src.fps or 30.0,
                     first_detection_ts=first_blob_ts,
                     span_sec=60.0,
                     max_frames=3,
@@ -463,14 +473,20 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                         "max_blob_area": max(fr.max_blob_area for fr in frs),
                     }
                     if vlm_agent is None:
-                        vlm_agent = vlm_client_adapter
+                        vlm_agent = agent
                     try:
-                        bird_present, confidence = await vlm_agent.detect_bird(
-                            frames_to_send, ctx
-                        )
+                        if vlm_agent is not None:
+                            bird_present, confidence = await vlm_agent.detect_bird(
+                                frames_to_send, ctx
+                            )
+                        else:
+                            # If no VLM agent is available, skip detection
+                            bird_present = None
+                            confidence = 0.0
                     except Exception as exc:
                         # Fail closed → keep REVIEW/MANUAL
                         bird_present = None
+                        confidence = 0.0
                         _trace(
                             f"[VLM ERROR] Window {w.window_id}: demotion check "
                             f"failed ({exc}); keeping {res.verdict.value}"
@@ -520,7 +536,7 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
                 Path(args.source_path),
                 video_elapsed_ts,
                 clip_start_hour=clip_start_hour,
-                fps=src.fps,
+                fps=src.fps or 30.0,
                 max_search_sec=60.0,
             )
             refined_ts = (
@@ -578,16 +594,20 @@ async def cmd_detect(args: argparse.Namespace, agent=None) -> int:
         if vlm_provider and res.verdict is det.Verdict.REVIEW:
             # 1. Payload Extraction (Phase 1) — use the possibly-refined first_detection_ts
             # and a 2-minute span so the model can see the bird's arrival.
+            # Ensure fps is a float; if src.fps is None, default to 30.0
+            fps_value = float(src.fps) if src.fps is not None else 30.0
             frames_to_send = agent_payload.extract_motion_frames(
-                Path(args.source_path), frs, fps=src.fps,
+                Path(args.source_path), frs, fps=fps_value,
                 first_detection_ts=res.first_detection_ts,
                 span_sec=120.0,  # 2 minutes: 1 min before + 1 min after detection
             )
             if frames_to_send:
                 # 2. Agent Proposal (Phase 2)
                 if agent is None:
-                    agent = vlm_client_adapter
-                    vlm_agent = agent
+                    # Instantiate the VLM client adapter if not provided
+                    agent = VLMClientAdapter()
+                # Ensure vlm_agent is set to agent
+                vlm_agent = agent
                 # context_metadata maps to agent.propose_observation's context_metadata arg
                 ctx = {
                     "tower": res.tower,
